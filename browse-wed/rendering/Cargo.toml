@@ -1,0 +1,20 @@
+[package]
+name = "bw-render"
+description = "browse-wed rendering pipeline: HTML tokenizer, DOM, CSS cascade, block/flex layout, tiny-skia raster, 60fps frame pacing"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+tiny-skia = { workspace = true }
+swash = { workspace = true }
+fontdb = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

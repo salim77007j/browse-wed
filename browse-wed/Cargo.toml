@@ -1,0 +1,134 @@
+[workspace]
+resolver = "2"
+members = [
+    "engine",
+    "networking",
+    "storage",
+    "privacy",
+    "js-engine",
+    "rendering",
+    "api",
+    "tests",
+    "benchmarks",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "MPL-2.0"
+repository = "https://github.com/salim77007j/browse-wed"
+authors = ["browse-wed engine team"]
+
+[workspace.dependencies]
+# --- async runtime -----------------------------------------------------------
+tokio = { version = "1", features = [
+    "rt-multi-thread",
+    "macros",
+    "net",
+    "time",
+    "io-util",
+    "sync",
+    "fs",
+    "signal",
+    "process",
+] }
+
+# --- HTTP core ---------------------------------------------------------------
+http = "1"
+http-body-util = "0.1"
+hyper = { version = "1", features = ["http1", "http2", "client"] }
+hyper-util = { version = "0.1", features = [
+    "client",
+    "client-legacy",
+    "http1",
+    "http2",
+    "tokio",
+    "service",
+] }
+bytes = "1"
+
+# --- TLS (rustls + ring: pure Rust, TLS 1.3, no OpenSSL) ---------------------
+rustls = { version = "0.23", default-features = false, features = [
+    "ring",
+    "tls12",
+    "std",
+] }
+tokio-rustls = { version = "0.26", default-features = false, features = [
+    "ring",
+    "tls12",
+] }
+webpki-roots = "0.26"
+
+# --- QUIC / HTTP-3 -----------------------------------------------------------
+quinn = { version = "0.11", default-features = false, features = [
+    "runtime-tokio",
+    "rustls-ring",
+    "log",
+] }
+h3 = "0.0.8"
+h3-quinn = "0.0.10"
+
+# --- DNS (DoH / DoT / DoQ) ---------------------------------------------------
+hickory-resolver = { version = "0.26", features = [
+    "system-config",
+    "tokio",
+    "https-ring",
+    "webpki-roots",
+] }
+
+# --- storage -----------------------------------------------------------------
+redb = "4"
+
+# --- JS engine (QuickJS-ng bindings) -----------------------------------------
+rquickjs = { version = "0.14", default-features = false, features = [
+    "std",
+    "classes",
+    "loader",
+    "rust-alloc",
+] }
+
+# --- rendering raster / fonts ------------------------------------------------
+tiny-skia = "0.12"
+swash = "0.2"
+fontdb = "0.24"
+
+# --- utility -----------------------------------------------------------------
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+url = "2"
+aho-corasick = "1"
+regex = "1"
+siphasher = "1"
+getrandom = "0.3"
+sha2 = "0.10"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+mimalloc = "0.1"
+libc = "0.2"
+windows-sys = { version = "0.60", features = [
+    "Win32_Foundation",
+    "Win32_System_SystemInformation",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }
+
+# --- dev / test / bench ------------------------------------------------------
+tempfile = "3"
+criterion = { version = "0.5", features = ["html_reports"] }
+arbitrary = { version = "1", features = ["derive"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+
+[profile.release-fast]
+inherits = "release"
+lto = "fat"
+
+[profile.bench]
+inherits = "release"
+debug = false
