@@ -300,6 +300,7 @@ fn touch_lru(lru: &mut Vec<String>, site: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
     #[test]
     fn executes_per_site() {
