@@ -1,2 +1,11 @@
-skills/
-node_modules/
+/target
+/Cargo.lock.bak
+**/*.rs.bk
+*.redb
+*.redb.tmp
+*.png
+!docs/images/*.png
+!design/*.png
+benmarks-results-tmp/
+.DS_Store
+Thumbs.db
