@@ -214,6 +214,20 @@ dependencies = [
 [[package]]
 name = "bw-tests"
 version = "0.1.0"
+dependencies = [
+ "bw-api",
+ "bw-engine",
+ "bw-js",
+ "bw-network",
+ "bw-privacy",
+ "bw-render",
+ "bw-storage",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "url",
+]
 
 [[package]]
 name = "bytemuck"

@@ -384,7 +384,9 @@ impl BrowserEngine {
                     TabState::Blank
                 };
                 tab.site = Some(site.clone());
-                if response.status.is_success() {
+                // Browsers keep error-page navigations (404/500) in
+                // history; synthetic policy blocks are NOT navigations.
+                if response.blocked_reason.is_none() {
                     tab.push_history(url.as_str().to_string(), outcome.title.clone());
                 }
             }

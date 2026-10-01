@@ -1,7 +1,29 @@
 [package]
 name = "bw-tests"
+description = "browse-wed cross-crate integration tests: full pipeline over a local HTTP server, privacy enforcement, storage round trips, session restore"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+authors.workspace = true
 
 [dependencies]
+bw-engine = { path = "../engine" }
+bw-network = { path = "../networking" }
+bw-storage = { path = "../storage" }
+bw-privacy = { path = "../privacy" }
+bw-js = { path = "../js-engine" }
+bw-render = { path = "../rendering" }
+bw-api = { path = "../api" }
+
+tokio = { workspace = true }
+serde_json = { workspace = true }
+url = { workspace = true }
+tracing = { workspace = true }
+tempfile = { workspace = true }
+
+
+[[test]]
+name = "integration"
+path = "src/lib.rs"

@@ -197,11 +197,18 @@ impl PolicyEngine {
 
     /// Upgrade a URL if policy says so: HSTS hosts, and (for navigations)
     /// opportunistic https upgrade.
+    ///
+    /// Loopback (`localhost`, `127.0.0.1`, `::1`) is never upgraded — the
+    /// same exemption Chrome/Firefox apply, since dev servers are plain
+    /// HTTP by design.
     pub fn upgrade_url(&self, url: &Url, is_navigation: bool) -> Option<Url> {
         if url.scheme() != "http" {
             return None;
         }
         let host = url.host_str()?;
+        if is_loopback(host) {
+            return None;
+        }
         if self.hsts_enabled && self.is_hsts(host) {
             let mut u = url.clone();
             let _ = u.set_scheme("https");
@@ -299,6 +306,14 @@ impl PolicyEngine {
             warned: self.stats.warned.load(Ordering::Relaxed),
         }
     }
+}
+
+/// Is this host loopback (never upgraded, never HSTS'd)?
+pub fn is_loopback(host: &str) -> bool {
+    host.eq_ignore_ascii_case("localhost")
+        || host == "127.0.0.1"
+        || host == "::1"
+        || host == "[::1]"
 }
 
 /// Parse `max-age=N` from an STS header.
