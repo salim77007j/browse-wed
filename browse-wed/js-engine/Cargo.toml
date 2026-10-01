@@ -1,7 +1,22 @@
 [package]
 name = "bw-js"
+description = "browse-wed JavaScript engine: QuickJS-ng runtimes with per-site isolation, memory caps, timeouts and a Rust interop bridge"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+authors.workspace = true
 
 [dependencies]
+rquickjs = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+sha2 = { workspace = true }
+getrandom = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
