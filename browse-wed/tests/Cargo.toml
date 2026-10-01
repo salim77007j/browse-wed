@@ -22,8 +22,13 @@ serde_json = { workspace = true }
 url = { workspace = true }
 tracing = { workspace = true }
 tempfile = { workspace = true }
+arbitrary = { workspace = true }
 
 
 [[test]]
 name = "integration"
 path = "src/lib.rs"
+
+[[test]]
+name = "fuzz"
+path = "src/fuzz.rs"

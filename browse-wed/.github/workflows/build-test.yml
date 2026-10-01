@@ -1,0 +1,127 @@
+name: build-test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  lint:
+    name: Clippy (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      # --all-targets covers lib, bins, benches, tests, fuzz harnesses.
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  test:
+    name: Tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run the full suite (unit + integration + fuzz harnesses)
+        run: cargo test --workspace
+      - name: Release-mode test (catches opt-dependent bugs)
+        run: cargo test --workspace --release
+      - name: Publish JUnit-style summary
+        if: always()
+        shell: bash
+        run: |
+          echo "## Test results" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cargo test --workspace -- --list 2>/dev/null | tail -5 >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+  bench:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Engine performance harness
+        run: cargo run -p bw-bench --release --bin engine_perf
+      - name: Criterion suites (smoke: short measurement)
+        run: |
+          cargo bench -p bw-bench --bench parsers -- --warm-up-time 1 --measurement-time 3
+          cargo bench -p bw-bench --bench privacy -- --warm-up-time 1 --measurement-time 3
+          cargo bench -p bw-bench --bench storage -- --warm-up-time 1 --measurement-time 3
+      - name: Collect results
+        run: |
+          {
+            echo "## Benchmark results"
+            echo
+            echo '```'
+            cat target/criterion/engine_perf.json 2>/dev/null || true
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+      - name: Upload criterion data
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-results
+          path: target/criterion
+          if-no-files-found: ignore
+
+  sanitizers:
+    name: Memory sanitizers (ASan + LSan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install valgrind as a second opinion
+        run: sudo apt-get update && sudo apt-get install -y valgrind
+      - name: AddressSanitizer + LeakSanitizer (unsafe-bearing crates)
+        env:
+          RUSTFLAGS: "-Zsanitizer=address -Zsanitizer=leak"
+          RUSTDOCFLAGS: "-Zsanitizer=address"
+        run: |
+          cargo +nightly test -p bw-js -p bw-engine --tests --target x86_64-unknown-linux-gnu -- --test-threads=2
+      - name: Valgrind leak check on integration tests
+        run: |
+          cargo build --workspace --tests
+          BIN=$(cargo metadata --format-version 1 | python3 -c "
+          import json,sys
+          meta = json.load(sys.stdin)
+          for t in meta['packages']:
+              if t['name'] == 'bw-tests':
+                  for target in t['targets']:
+                      if 'integration' in target['name']:
+                          kind = target['kind'][0]
+                          print('target/debug/deps/integration-*')
+                          break")
+          # Run the freshly built integration test binary under valgrind.
+          TEST_BIN=$(ls -t target/debug/deps/integration-* 2>/dev/null | grep -v '\.d$' | head -1)
+          if [ -n "$TEST_BIN" ]; then
+            valgrind --error-exitcode=99 --leak-check=full --errors-for-leak-kinds=definite "$TEST_BIN" || exit 1
+          else
+            echo "integration binary not found; skipping"
+          fi
