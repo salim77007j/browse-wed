@@ -111,7 +111,7 @@ pub struct Storage {
     config: StorageConfig,
     db: std::sync::Arc<redb::Database>,
     cookies: cookies::CookieJar,
-    cache: cache::HttpCache,
+    cache: std::sync::Arc<cache::HttpCache>,
 }
 
 impl Storage {
@@ -133,10 +133,10 @@ impl Storage {
         tx.commit()?;
 
         let cookies = cookies::CookieJar::load(&db)?;
-        let cache = cache::HttpCache::new(
+        let cache = std::sync::Arc::new(cache::HttpCache::new(
             config.memory_cache_budget,
             config.disk_cache_budget,
-        );
+        ));
 
         Ok(Storage {
             config,
@@ -161,9 +161,16 @@ impl Storage {
         &self.cache
     }
 
-    /// The HTTP cache (mutable).
-    pub fn cache_mut(&mut self) -> &mut cache::HttpCache {
-        &mut self.cache
+    /// Shared handle to the HTTP cache — handed to the network stack,
+    /// which must write responses from async tasks.
+    pub fn cache_handle(&self) -> std::sync::Arc<cache::HttpCache> {
+        std::sync::Arc::clone(&self.cache)
+    }
+
+    /// The underlying database handle (for engine-level persistence such
+    /// as the cookie jar the network stack owns).
+    pub fn db(&self) -> &std::sync::Arc<redb::Database> {
+        &self.db
     }
 
     /// LocalStorage view for a (partition, origin) pair.
