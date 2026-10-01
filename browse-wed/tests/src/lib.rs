@@ -12,6 +12,9 @@
 //! * tab suspension freeing pages, session save/restore.
 
 #![forbid(unsafe_code)]
+// This crate is a test-only crate: in non-test builds it compiles to
+// nothing (the `[[test]]` target compiles the same source with dev-deps).
+#![cfg(test)]
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use std::sync::atomic::{AtomicUsize, Ordering};
