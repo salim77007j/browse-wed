@@ -1,7 +1,52 @@
 [package]
 name = "bw-bench"
+description = "browse-wed benchmark suite: parser/filter/cache/JS hot paths (criterion) + engine cold-start and tab churn harnesses + browser-comparison scripts"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+authors.workspace = true
 
 [dependencies]
+bw-engine = { path = "../engine" }
+bw-network = { path = "../networking" }
+bw-storage = { path = "../storage" }
+bw-privacy = { path = "../privacy" }
+bw-js = { path = "../js-engine" }
+bw-render = { path = "../rendering" }
+
+tokio = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+criterion = { workspace = true }
+url = { workspace = true }
+
+[[bench]]
+name = "parsers"
+path = "benches/parsers.rs"
+harness = false
+
+[[bench]]
+name = "privacy"
+path = "benches/privacy.rs"
+harness = false
+
+[[bench]]
+name = "storage"
+path = "benches/storage.rs"
+harness = false
+
+[[bench]]
+name = "javascript"
+path = "benches/javascript.rs"
+harness = false
+
+[[bin]]
+name = "engine_perf"
+path = "src/engine_perf.rs"
+
+[profile.bench]
+inherits = "release"
+debug = false
+

@@ -401,6 +401,43 @@ impl BrowserEngine {
         Ok(outcome)
     }
 
+    /// Load a local HTML document into a tab without any network I/O —
+    /// the path for `about:` pages, error pages, and session-restore
+    /// previews. The page pipeline (DOM, title, cosmetic filters) runs
+    /// exactly as for a network navigation.
+    pub async fn load_local(
+        &self,
+        id: TabId,
+        url_str: &str,
+        html: &str,
+    ) -> Result<NavigationOutcome, EngineError> {
+        let url = Url::parse(url_str).map_err(|e| EngineError::InvalidUrl(e.to_string()))?;
+        let host = url.host_str().unwrap_or_default().to_string();
+        let page = page::build_page(html, &host, &self.cosmetics);
+        let outcome = NavigationOutcome {
+            final_url: url.as_str().to_string(),
+            status: 200,
+            title: page.title.clone(),
+            body_len: html.len(),
+            protocol: "local".into(),
+            from_cache: false,
+            page: page.stats,
+            cosmetic_hidden: page.hidden.len(),
+            blocked: 0,
+            total_ms: 0.0,
+        };
+        {
+            let mut tabs = self.tabs.lock().await;
+            if let Some(tab) = tabs.get_mut(id) {
+                tab.state = TabState::Loaded;
+                tab.site = Some(format!("{}://{}", url.scheme(), host));
+                tab.push_history(url.as_str().to_string(), outcome.title.clone());
+            }
+        }
+        self.live.lock().await.insert(id, LiveTab { page });
+        Ok(outcome)
+    }
+
     /// Go back in a tab's history; returns the URL navigated to.
     pub async fn go_back(&self, id: TabId) -> Result<Option<String>, EngineError> {
         let target = {
