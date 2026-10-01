@@ -7,7 +7,7 @@
 use redb::{ReadableDatabase, ReadableTable};
 
 use crate::keyspace;
-use crate::{LS_TABLE, Result};
+use crate::{Result, LS_TABLE};
 
 /// Default quota per (partition, origin): 5 MiB.
 pub const DEFAULT_QUOTA_BYTES: usize = 5 * 1024 * 1024;
@@ -172,7 +172,9 @@ mod tests {
 
     fn ls(tag: &str) -> (LocalStorage, tempfile::TempDir) {
         let dir = tempfile::tempdir().unwrap();
-        let db = std::sync::Arc::new(redb::Database::create(dir.path().join(format!("{tag}.redb"))).unwrap());
+        let db = std::sync::Arc::new(
+            redb::Database::create(dir.path().join(format!("{tag}.redb"))).unwrap(),
+        );
         (LocalStorage::new(db, "top.example", "https://origin.example"), dir)
     }
 

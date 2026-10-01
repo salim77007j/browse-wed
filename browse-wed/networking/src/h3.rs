@@ -65,12 +65,7 @@ impl H3Client {
             quinn_config.transport_config(Arc::new(transport));
         }
         endpoint.set_default_client_config(quinn_config);
-        Ok(H3Client {
-            endpoint,
-            dns,
-            connections: Mutex::new(HashMap::new()),
-            connect_timeout,
-        })
+        Ok(H3Client { endpoint, dns, connections: Mutex::new(HashMap::new()), connect_timeout })
     }
 
     /// Issue a full request/response round trip over HTTP/3.
@@ -113,35 +108,25 @@ impl H3Client {
     async fn open_connection(&self, url: &url::Url) -> std::result::Result<H3Connection, H3Error> {
         let host = url.host_str().ok_or(H3Error::NoHost)?.to_string();
         let port = url.port_or_known_default().unwrap_or(443);
-        let addrs = self
-            .dns
-            .resolve(&host)
-            .await
-            .map_err(|e| H3Error::Dns(e.to_string()))?;
+        let addrs = self.dns.resolve(&host).await.map_err(|e| H3Error::Dns(e.to_string()))?;
         let addr = SocketAddr::new(addrs[0], port);
 
-        let connecting = self
-            .endpoint
-            .connect(addr, &host)
-            .map_err(|e| H3Error::Quic(e.to_string()))?;
+        let connecting =
+            self.endpoint.connect(addr, &host).map_err(|e| H3Error::Quic(e.to_string()))?;
         let quinn_conn = tokio::time::timeout(self.connect_timeout, connecting)
             .await
             .map_err(|_| H3Error::Timeout)?
             .map_err(|e| H3Error::Quic(e.to_string()))?;
 
         let h3_conn = h3_quinn::Connection::new(quinn_conn);
-        let (driver, send_request) = h3::client::new(h3_conn)
-            .await
-            .map_err(|e| H3Error::H3(e.to_string()))?;
+        let (driver, send_request) =
+            h3::client::new(h3_conn).await.map_err(|e| H3Error::H3(e.to_string()))?;
         // Drive the connection in the background until it idles out.
         let _driver = tokio::spawn(async move {
             let mut driver = driver;
             let _ = driver.wait_idle().await;
         });
-        Ok(H3Connection {
-            send_request,
-            _driver,
-        })
+        Ok(H3Connection { send_request, _driver })
     }
 }
 
@@ -157,9 +142,7 @@ async fn round_trip(
     for (name, value) in &headers {
         builder = builder.header(name, value);
     }
-    let req = builder
-        .body(())
-        .map_err(|e| H3Error::RequestBuild(e.to_string()))?;
+    let req = builder.body(()).map_err(|e| H3Error::RequestBuild(e.to_string()))?;
 
     let mut stream = conn
         .send_request
@@ -175,15 +158,14 @@ async fn round_trip(
     }
     stream.finish().await.map_err(|e| H3Error::Stream(e.to_string()))?;
 
-    let response = stream
-        .recv_response()
-        .await
-        .map_err(|e| H3Error::Stream(e.to_string()))?;
+    let response = stream.recv_response().await.map_err(|e| H3Error::Stream(e.to_string()))?;
     let status = response.status();
     let headers = response.headers().clone();
 
     let mut body_buf: Vec<u8> = Vec::new();
-    while let Some(mut chunk) = stream.recv_data().await.map_err(|e| H3Error::Stream(e.to_string()))? {
+    while let Some(mut chunk) =
+        stream.recv_data().await.map_err(|e| H3Error::Stream(e.to_string()))?
+    {
         // Safety cap: 64 MiB bodies for h3 path (larger transfers should
         // stream through the h1/h2 path; this cap guards memory).
         if body_buf.len() + chunk.remaining() > 64 * 1024 * 1024 {
@@ -194,11 +176,7 @@ async fn round_trip(
         }
     }
 
-    Ok(H3Response {
-        status,
-        headers,
-        body: Bytes::from(body_buf),
-    })
+    Ok(H3Response { status, headers, body: Bytes::from(body_buf) })
 }
 
 /// A complete h3 response.

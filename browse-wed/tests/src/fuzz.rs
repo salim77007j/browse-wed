@@ -14,7 +14,7 @@
 
 use arbitrary::Arbitrary;
 use bw_privacy::cname::{CnameChain, Uncloaker};
-use bw_privacy::cosmetic::{parse_selector_list, CosmeticFilterSet};
+use bw_privacy::cosmetic::CosmeticFilterSet;
 use bw_privacy::filter::FilterSet;
 use bw_privacy::safebrowsing::{canonicalize, BloomFilter, SafeBrowsingDb};
 use bw_privacy::{Decision, RequestContext, ResourceType};
@@ -41,41 +41,40 @@ impl Rng {
 
 /// Random bytes biased toward HTML-ish structure (tags, quotes, brackets).
 fn htmlish(rng: &mut Rng, len: usize) -> String {
-    const ALPHABET: &[u8] = b"<>/=\"' abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-&;#!\n\t";
-    (0..len)
-        .map(|_| ALPHABET[(rng.next_u64() as usize) % ALPHABET.len()] as char)
-        .collect()
+    const ALPHABET: &[u8] =
+        b"<>/=\"' abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-&;#!\n\t";
+    (0..len).map(|_| ALPHABET[(rng.next_u64() as usize) % ALPHABET.len()] as char).collect()
 }
 
 /// Random bytes biased toward CSS-ish structure.
 fn cssish(rng: &mut Rng, len: usize) -> String {
     const ALPHABET: &[u8] = b"{}:;,.#[]()= \nabcdefghijklmnopqrstuvwxyz0123456789%-/*";
-    (0..len)
-        .map(|_| ALPHABET[(rng.next_u64() as usize) % ALPHABET.len()] as char)
-        .collect()
+    (0..len).map(|_| ALPHABET[(rng.next_u64() as usize) % ALPHABET.len()] as char).collect()
 }
 
 /// Random bytes biased toward filter-rule structure.
 fn ruleish(rng: &mut Rng, len: usize) -> String {
     const ALPHABET: &[u8] = b"||^$*~|.,-/#@:[]=\" abcdefghijklmnopqrstuvwxyz0123456789_";
-    (0..len)
-        .map(|_| ALPHABET[(rng.next_u64() as usize) % ALPHABET.len()] as char)
-        .collect()
+    (0..len).map(|_| ALPHABET[(rng.next_u64() as usize) % ALPHABET.len()] as char).collect()
 }
 
 /// Random URL-ish strings.
 fn urlish(rng: &mut Rng) -> String {
     const HOSTS: &[&str] = &[
-        "example.com", "sub.example.com", "tracker.example", "localhost",
-        "cdn.example.net", "a.b.c.example.org", "xn--80ak6aa92e.com",
+        "example.com",
+        "sub.example.com",
+        "tracker.example",
+        "localhost",
+        "cdn.example.net",
+        "a.b.c.example.org",
+        "xn--80ak6aa92e.com",
     ];
     const SCHEMES: &[&str] = &["http", "https", "ftp", "data", "ws"];
     let scheme = SCHEMES[(rng.next_u64() as usize) % SCHEMES.len()];
     let host = HOSTS[(rng.next_u64() as usize) % HOSTS.len()];
     let path_len = (rng.next_u64() % 24) as usize;
-    let path: String = (0..path_len)
-        .map(|_| (b'a' + (rng.next_u64() % 26) as u8) as char)
-        .collect();
+    let path: String =
+        (0..path_len).map(|_| (b'a' + (rng.next_u64() % 26) as u8) as char).collect();
     format!("{scheme}://{host}/{path}")
 }
 
@@ -87,7 +86,10 @@ const ITERS: usize = 2_000;
 fn fuzz_html_tokenizer_never_panics() {
     let mut rng = Rng::new(0x5eed_1111);
     for i in 0..ITERS {
-        let input = { let n = (rng.next_u64() % 512) as usize; htmlish(&mut rng, n) };
+        let input = {
+            let n = (rng.next_u64() % 512) as usize;
+            htmlish(&mut rng, n)
+        };
         let tokens = tokenize(&input);
         // Invariant 1: tokenization never panics (never-panic guarantee).
         // Invariant 2: tree building never panics.
@@ -111,7 +113,10 @@ fn fuzz_html_idempotent_text_tail() {
     // run's content beyond what framing requires.
     let mut rng = Rng::new(0x5eed_2222);
     for _ in 0..ITERS / 4 {
-        let input = { let n = (rng.next_u64() % 128) as usize; htmlish(&mut rng, n) };
+        let input = {
+            let n = (rng.next_u64() % 128) as usize;
+            htmlish(&mut rng, n)
+        };
         let tokens = tokenize(&input);
         let count = tokens.len();
         let retok = tokenize(&input);
@@ -127,7 +132,10 @@ fn fuzz_css_parser_never_panics() {
     let mut rng = Rng::new(0x5eed_3333);
     let doc = parse_html("<html><body><div class=\"c\" id=\"i\"><p>x</p></div></body></html>");
     for _ in 0..ITERS {
-        let css = { let n = (rng.next_u64() % 256) as usize; cssish(&mut rng, n) };
+        let css = {
+            let n = (rng.next_u64() % 256) as usize;
+            cssish(&mut rng, n)
+        };
         let sheet = parse_stylesheet(&css);
         // Cascade with hostile CSS must not panic and must terminate.
         let _styles = cascade(&doc, &[sheet], "");
@@ -141,7 +149,10 @@ fn fuzz_filter_rules_never_panic() {
     let mut rng = Rng::new(0x5eed_4444);
     // Phase 1: parse + compile hostile rules.
     let rules: Vec<String> = (0..256)
-        .map(|_| { let n = (rng.next_u64() % 64) as usize; ruleish(&mut rng, n) })
+        .map(|_| {
+            let n = (rng.next_u64() % 64) as usize;
+            ruleish(&mut rng, n)
+        })
         .collect();
     // Compile must not panic whether it succeeds or rejects.
     let set = FilterSet::compile(&rules).unwrap_or_else(|_| FilterSet::from_filters(Vec::new()));
@@ -159,10 +170,7 @@ fn fuzz_filter_rules_never_panic() {
         };
         let verdict = set.decide(&ctx);
         // Invariant: the verdict is one of the three defined values.
-        assert!(matches!(
-            verdict,
-            Decision::Allow | Decision::Block | Decision::Neuter
-        ));
+        assert!(matches!(verdict, Decision::Allow | Decision::Block | Decision::Neuter));
     }
 }
 
@@ -174,7 +182,10 @@ fn fuzz_cosmetic_selectors_never_panic() {
     );
     let mut rules: Vec<String> = Vec::new();
     for _ in 0..128 {
-        let sel = { let n = (rng.next_u64() % 48) as usize; ruleish(&mut rng, n) };
+        let sel = {
+            let n = (rng.next_u64() % 48) as usize;
+            ruleish(&mut rng, n)
+        };
         rules.push(format!("example.com##{sel}"));
     }
     let set = CosmeticFilterSet::compile(&rules);
@@ -190,16 +201,19 @@ fn fuzz_cosmetic_selectors_never_panic() {
 #[test]
 fn fuzz_safebrowsing_canonicalize_and_bloom() {
     let mut rng = Rng::new(0x5eed_6666);
-    let mut db = SafeBrowsingDb::new(1024, 0.01);
+    let db = SafeBrowsingDb::new(1024, 0.01);
     for _ in 0..ITERS / 2 {
         let url = urlish(&mut rng);
         let canonical = canonicalize(&url);
         // Canonicalization is total (never panics) and produces a string.
         assert!(canonical.len() < 4096);
         let verdict = db.check(&url);
-        assert!(matches!(verdict, bw_privacy::safebrowsing::Verdict::Safe
-            | bw_privacy::safebrowsing::Verdict::Threat
-            | bw_privacy::safebrowsing::Verdict::Unverified));
+        assert!(matches!(
+            verdict,
+            bw_privacy::safebrowsing::Verdict::Safe
+                | bw_privacy::safebrowsing::Verdict::Threat
+                | bw_privacy::safebrowsing::Verdict::Unverified
+        ));
         // Bloom filter serialization round trips.
         let bytes = db.to_bytes();
         if let Some(loaded) = SafeBrowsingDb::from_bytes(&bytes) {
@@ -219,7 +233,10 @@ fn fuzz_set_cookie_parsing_never_panics() {
     let mut rng = Rng::new(0x5eed_7777);
     let mut jar = CookieJar::new();
     for _ in 0..ITERS {
-        let header = { let n = (rng.next_u64() % 96) as usize; ruleish(&mut rng, n) };
+        let header = {
+            let n = (rng.next_u64() % 96) as usize;
+            ruleish(&mut rng, n)
+        };
         let url = urlish(&mut rng);
         if let Ok(parsed) = url::Url::parse(&url) {
             // Total on arbitrary header values.
@@ -267,9 +284,15 @@ fn fuzz_cname_chains_never_panic() {
 fn fuzz_hsts_and_alt_svc_parsing() {
     let mut rng = Rng::new(0x5eed_9999);
     for _ in 0..ITERS / 2 {
-        let sts = { let n = (rng.next_u64() % 48) as usize; ruleish(&mut rng, n) };
+        let sts = {
+            let n = (rng.next_u64() % 48) as usize;
+            ruleish(&mut rng, n)
+        };
         let _ = bw_network::policy::parse_max_age(&sts);
-        let alt = { let n = (rng.next_u64() % 48) as usize; ruleish(&mut rng, n) };
+        let alt = {
+            let n = (rng.next_u64() % 48) as usize;
+            ruleish(&mut rng, n)
+        };
         let _ = bw_network::policy::parse_alt_svc(&alt);
     }
 }

@@ -48,9 +48,7 @@
 
 use std::sync::Arc;
 
-use bw_engine::{
-    BrowserEngine, EngineConfig, GovernorPolicy, MemoryPressure, TabEntry, TabId,
-};
+use bw_engine::{BrowserEngine, EngineConfig, GovernorPolicy, MemoryPressure, TabEntry, TabId};
 use bw_network::DnsMode;
 use tokio::sync::{broadcast, Mutex};
 
@@ -221,15 +219,10 @@ impl BrowserApi {
     /// runtime.
     pub async fn start(options: EngineOptions) -> Result<Arc<BrowserApi>, ApiError> {
         let config = build_config(&options)?;
-        let engine = BrowserEngine::new(config)
-            .await
-            .map_err(|e| ApiError::EngineStart(e.to_string()))?;
+        let engine =
+            BrowserEngine::new(config).await.map_err(|e| ApiError::EngineStart(e.to_string()))?;
         let (events, _) = broadcast::channel(1024);
-        Ok(Arc::new(BrowserApi {
-            engine,
-            events,
-            pressure: Mutex::new(MemoryPressure::Unknown),
-        }))
+        Ok(Arc::new(BrowserApi { engine, events, pressure: Mutex::new(MemoryPressure::Unknown) }))
     }
 
     /// Subscribe to the event stream (multiple subscribers allowed).
@@ -259,27 +252,20 @@ impl BrowserApi {
                 let id = TabId(tab);
                 match self.engine.navigate(id, &url).await {
                     Ok(outcome) => {
-                        let _ = self
-                            .events
-                            .send(Event::NavigationCompleted { tab, outcome });
+                        let _ = self.events.send(Event::NavigationCompleted { tab, outcome });
                         self.emit_pressure_if_changed().await;
                         Ok(serde_json::json!({ "navigated": true }))
                     }
                     Err(e) => {
-                        let _ = self.events.send(Event::NavigationFailed {
-                            tab,
-                            error: e.to_string(),
-                        });
+                        let _ =
+                            self.events.send(Event::NavigationFailed { tab, error: e.to_string() });
                         Err(ApiError::Navigation(e.to_string()))
                     }
                 }
             }
             Command::GoBack { tab } => {
                 let id = TabId(tab);
-                self.engine
-                    .go_back(id)
-                    .await
-                    .map_err(|e| ApiError::Navigation(e.to_string()))?;
+                self.engine.go_back(id).await.map_err(|e| ApiError::Navigation(e.to_string()))?;
                 Ok(serde_json::json!({ "went_back": true }))
             }
             Command::GoForward { tab } => {
@@ -292,26 +278,17 @@ impl BrowserApi {
             }
             Command::BackgroundTab { tab } => {
                 let id = TabId(tab);
-                self.engine
-                    .background_tab(id)
-                    .await
-                    .map_err(|_| ApiError::NoSuchTab(tab))?;
+                self.engine.background_tab(id).await.map_err(|_| ApiError::NoSuchTab(tab))?;
                 Ok(serde_json::json!({ "backgrounded": true }))
             }
             Command::ActivateTab { tab } => {
                 let id = TabId(tab);
-                self.engine
-                    .activate_tab(id)
-                    .await
-                    .map_err(|_| ApiError::NoSuchTab(tab))?;
+                self.engine.activate_tab(id).await.map_err(|_| ApiError::NoSuchTab(tab))?;
                 Ok(serde_json::json!({ "activated": true }))
             }
             Command::SuspendTab { tab } => {
                 let id = TabId(tab);
-                self.engine
-                    .suspend_tab(id)
-                    .await
-                    .map_err(|_| ApiError::NoSuchTab(tab))?;
+                self.engine.suspend_tab(id).await.map_err(|_| ApiError::NoSuchTab(tab))?;
                 Ok(serde_json::json!({ "suspended": true }))
             }
             Command::SweepIdle => {
@@ -327,18 +304,13 @@ impl BrowserApi {
                 Ok(serde_json::json!({ "suspended": count }))
             }
             Command::SaveSession => {
-                self.engine
-                    .save_session()
-                    .await
-                    .map_err(|e| ApiError::Session(e.to_string()))?;
+                self.engine.save_session().await.map_err(|e| ApiError::Session(e.to_string()))?;
                 let _ = self.events.send(Event::SessionSaved);
                 Ok(serde_json::json!({ "saved": true }))
             }
             Command::ExecJs { site, code } => {
-                let value = self
-                    .engine
-                    .exec_js(&site, &code)
-                    .map_err(|e| ApiError::Js(e.to_string()))?;
+                let value =
+                    self.engine.exec_js(&site, &code).map_err(|e| ApiError::Js(e.to_string()))?;
                 Ok(serde_json::to_value(value).unwrap_or(serde_json::Value::Null))
             }
         }
@@ -390,11 +362,8 @@ impl BrowserApi {
 
 /// Translate API options into the engine configuration.
 fn build_config(options: &EngineOptions) -> Result<EngineConfig, ApiError> {
-    let profile_dir = options
-        .profile_dir
-        .clone()
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| {
+    let profile_dir =
+        options.profile_dir.clone().map(std::path::PathBuf::from).unwrap_or_else(|| {
             std::env::temp_dir().join(format!("browse-wed-{}", std::process::id()))
         });
 
@@ -405,10 +374,7 @@ fn build_config(options: &EngineOptions) -> Result<EngineConfig, ApiError> {
         }
         cfg
     } else {
-        EngineConfig {
-            profile_dir,
-            ..EngineConfig::default()
-        }
+        EngineConfig { profile_dir, ..EngineConfig::default() }
     };
     config.governor = GovernorPolicy {
         background_suspend_after: std::time::Duration::from_secs(options.background_suspend_secs),
@@ -424,9 +390,7 @@ mod tests {
 
     fn opts() -> EngineOptions {
         EngineOptions {
-            profile_dir: Some(
-                tempfile::tempdir().unwrap().keep().to_string_lossy().into_owned(),
-            ),
+            profile_dir: Some(tempfile::tempdir().unwrap().keep().to_string_lossy().into_owned()),
             background_suspend_secs: 1,
             ..EngineOptions::default()
         }
@@ -464,9 +428,7 @@ mod tests {
     async fn navigate_invalid_url_fails_cleanly() {
         let api = BrowserApi::start(opts()).await.unwrap();
         let tab = api.command(Command::NewTab).await.unwrap()["tab"].as_u64().unwrap();
-        let err = api
-            .command(Command::Navigate { tab, url: "not a url".into() })
-            .await;
+        let err = api.command(Command::Navigate { tab, url: "not a url".into() }).await;
         assert!(matches!(err, Err(ApiError::Navigation(_))));
     }
 
@@ -475,9 +437,7 @@ mod tests {
         // The default preset carries the starter filter list; navigating
         // to a known tracker yields a synthetic 204 without any I/O.
         let opts = EngineOptions {
-            profile_dir: Some(
-                tempfile::tempdir().unwrap().keep().to_string_lossy().into_owned(),
-            ),
+            profile_dir: Some(tempfile::tempdir().unwrap().keep().to_string_lossy().into_owned()),
             privacy_preset: true,
             doh_url: Some("https://dns.quad9.net/dns-query".into()),
             ..EngineOptions::default()
@@ -502,10 +462,7 @@ mod tests {
     async fn exec_js_round_trips() {
         let api = BrowserApi::start(opts()).await.unwrap();
         let reply = api
-            .command(Command::ExecJs {
-                site: "https://x.example".into(),
-                code: "40 + 2".into(),
-            })
+            .command(Command::ExecJs { site: "https://x.example".into(), code: "40 + 2".into() })
             .await
             .unwrap();
         assert_eq!(reply, serde_json::json!(42.0));

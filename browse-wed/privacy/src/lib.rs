@@ -31,8 +31,8 @@
 
 pub mod cname;
 pub mod cosmetic;
-pub mod fingerprint;
 pub mod filter;
+pub mod fingerprint;
 pub mod safebrowsing;
 
 /// The verdict a filter engine returns for a candidate request.

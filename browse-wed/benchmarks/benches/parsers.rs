@@ -20,7 +20,9 @@ fn sample_html() -> String {
         for cell in 0..10 {
             html.push_str("<div class=\"cell\"><p>Cell ");
             html.push_str(&cell.to_string());
-            html.push_str(" content with <a href=\"/x\">a link</a> and <b>bold</b> text.</p></div>");
+            html.push_str(
+                " content with <a href=\"/x\">a link</a> and <b>bold</b> text.</p></div>",
+            );
         }
         html.push_str("</div>");
     }

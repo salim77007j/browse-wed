@@ -49,7 +49,11 @@ impl JsValue {
             JsValue::Undefined | JsValue::Null | JsValue::Function => serde_json::Value::Null,
             JsValue::Bool(b) => serde_json::Value::Bool(*b),
             JsValue::Number(n) => {
-                if n.is_finite() && n.fract() == 0.0 && *n >= i64::MIN as f64 && *n <= i64::MAX as f64 {
+                if n.is_finite()
+                    && n.fract() == 0.0
+                    && *n >= i64::MIN as f64
+                    && *n <= i64::MAX as f64
+                {
                     serde_json::Value::Number((*n as i64).into())
                 } else if n.is_finite() {
                     serde_json::json!(n)
@@ -59,7 +63,9 @@ impl JsValue {
                 }
             }
             JsValue::String(s) => serde_json::Value::String(s.clone()),
-            JsValue::Array(a) => serde_json::Value::Array(a.iter().map(Self::to_json_value).collect()),
+            JsValue::Array(a) => {
+                serde_json::Value::Array(a.iter().map(Self::to_json_value).collect())
+            }
             JsValue::Object(o) => serde_json::Value::Object(
                 o.iter().map(|(k, v)| (k.clone(), v.to_json_value())).collect(),
             ),
@@ -87,9 +93,7 @@ fn convert(v: &Value<'_>, depth: usize) -> rquickjs::Result<JsValue> {
         rquickjs::Type::Uninitialized | rquickjs::Type::Undefined => Ok(JsValue::Undefined),
         rquickjs::Type::Null => Ok(JsValue::Null),
         rquickjs::Type::Bool => Ok(JsValue::Bool(v.as_bool().unwrap_or(false))),
-        rquickjs::Type::Int => Ok(JsValue::Number(
-            v.as_int().map(|i| i as f64).unwrap_or(0.0),
-        )),
+        rquickjs::Type::Int => Ok(JsValue::Number(v.as_int().map(|i| i as f64).unwrap_or(0.0))),
         rquickjs::Type::Float => Ok(JsValue::Number(v.as_float().unwrap_or(0.0))),
         rquickjs::Type::String => {
             let s: String = String::from_js(v.ctx(), v.clone()).unwrap_or_default();
@@ -179,9 +183,7 @@ mod tests {
     fn cycles_do_not_recurse_forever() {
         let rt = rt();
         // Self-referencing object must hit the depth cap, not blow the stack.
-        let v = rt
-            .exec("const a = {}; a.self = a; a")
-            .unwrap();
+        let v = rt.exec("const a = {}; a.self = a; a").unwrap();
         assert!(matches!(v, JsValue::Object(_)));
     }
 

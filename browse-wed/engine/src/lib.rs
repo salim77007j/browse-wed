@@ -47,8 +47,8 @@ use bw_js::{JsEngine, JsValue, RuntimeLimits};
 use bw_network::fetch::{CacheMode, FetchRequest, FetchResponse, FetchService};
 use bw_network::NetworkConfig;
 use bw_privacy::cosmetic::CosmeticFilterSet;
-use bw_privacy::fingerprint::{FpEngine, FpMode};
 use bw_privacy::filter::FilterSet;
+use bw_privacy::fingerprint::{FpEngine, FpMode};
 use bw_privacy::safebrowsing::SafeBrowsingDb;
 use bw_storage::cache::HttpCache;
 use bw_storage::cookies::CookieJar;
@@ -104,10 +104,8 @@ pub struct EngineConfig {
 impl Default for EngineConfig {
     fn default() -> Self {
         EngineConfig {
-            profile_dir: std::env::temp_dir().join(format!(
-                "browse-wed-profile-{}",
-                std::process::id()
-            )),
+            profile_dir: std::env::temp_dir()
+                .join(format!("browse-wed-profile-{}", std::process::id())),
             network: NetworkConfig::default(),
             governor: GovernorPolicy::default(),
             network_filter_rules: Vec::new(),
@@ -125,10 +123,7 @@ impl EngineConfig {
             profile_dir: profile_dir.into(),
             network: NetworkConfig::privacy_default(),
             governor: GovernorPolicy::default(),
-            network_filter_rules: starter_network_filters()
-                .iter()
-                .map(|s| s.to_string())
-                .collect(),
+            network_filter_rules: starter_network_filters().iter().map(|s| s.to_string()).collect(),
             cosmetic_filter_rules: starter_cosmetic_filters()
                 .iter()
                 .map(|s| s.to_string())
@@ -251,10 +246,8 @@ impl BrowserEngine {
         // --- Stage: memory governor + budgets -------------------------------
         let governor = MemoryGovernor::new(config.governor);
         storage.cache_handle().set_memory_budget(governor.http_cache_memory_budget());
-        let js_limits = RuntimeLimits {
-            memory_limit: governor.js_heap_limit(),
-            ..RuntimeLimits::default()
-        };
+        let js_limits =
+            RuntimeLimits { memory_limit: governor.js_heap_limit(), ..RuntimeLimits::default() };
         let cookies = Arc::new(Mutex::new(CookieJar::load(storage.db())?));
         let cache = storage.cache_handle();
 
@@ -320,7 +313,11 @@ impl BrowserEngine {
     }
 
     /// Navigate a tab to `url`.
-    pub async fn navigate(&self, id: TabId, url_str: &str) -> Result<NavigationOutcome, EngineError> {
+    pub async fn navigate(
+        &self,
+        id: TabId,
+        url_str: &str,
+    ) -> Result<NavigationOutcome, EngineError> {
         let url = Url::parse(url_str).map_err(|e| EngineError::InvalidUrl(e.to_string()))?;
         // Only http(s) is navigable at engine level.
         if !matches!(url.scheme(), "http" | "https") {
@@ -378,11 +375,8 @@ impl BrowserEngine {
         {
             let mut tabs = self.tabs.lock().await;
             if let Some(tab) = tabs.get_mut(id) {
-                tab.state = if response.status.is_success() {
-                    TabState::Loaded
-                } else {
-                    TabState::Blank
-                };
+                tab.state =
+                    if response.status.is_success() { TabState::Loaded } else { TabState::Blank };
                 tab.site = Some(site.clone());
                 // Browsers keep error-page navigations (404/500) in
                 // history; synthetic policy blocks are NOT navigations.
@@ -472,12 +466,7 @@ impl BrowserEngine {
 
     /// Mark a tab backgrounded (starts the suspension clock).
     pub async fn background_tab(&self, id: TabId) -> Result<(), EngineError> {
-        self.tabs
-            .lock()
-            .await
-            .get_mut(id)
-            .ok_or(EngineError::NoSuchTab)?
-            .background();
+        self.tabs.lock().await.get_mut(id).ok_or(EngineError::NoSuchTab)?.background();
         Ok(())
     }
 
@@ -507,9 +496,7 @@ impl BrowserEngine {
     pub async fn suspend_tab(&self, id: TabId) -> Result<bool, EngineError> {
         let site = {
             let mut tabs = self.tabs.lock().await;
-            tabs.get_mut(id)
-                .ok_or(EngineError::NoSuchTab)?
-                .suspend_and_site()
+            tabs.get_mut(id).ok_or(EngineError::NoSuchTab)?.suspend_and_site()
         };
         let page_dropped = self.live.lock().await.remove(&id).is_some();
         let js_dropped = match site {
@@ -586,11 +573,7 @@ impl BrowserEngine {
     pub async fn save_session(&self) -> Result<(), EngineError> {
         let (tabs, next_id) = {
             let tabs = self.tabs.lock().await;
-            let next = tabs
-                .all()
-                .last()
-                .map(|t| t.id.0 + 1)
-                .unwrap_or(1);
+            let next = tabs.all().last().map(|t| t.id.0 + 1).unwrap_or(1);
             (tabs.all().to_vec(), next)
         };
         let session = SessionFile {
@@ -727,16 +710,16 @@ mod tests {
                     .unwrap()
                     .as_nanos()
             )),
-            network: NetworkConfig {
-                dns: DnsMode::System,
-                ..NetworkConfig::default()
-            },
+            network: NetworkConfig { dns: DnsMode::System, ..NetworkConfig::default() },
             governor: GovernorPolicy {
                 background_suspend_after: Duration::from_millis(50),
                 ..GovernorPolicy::default()
             },
             network_filter_rules: starter_network_filters().iter().map(|s| s.to_string()).collect(),
-            cosmetic_filter_rules: starter_cosmetic_filters().iter().map(|s| s.to_string()).collect(),
+            cosmetic_filter_rules: starter_cosmetic_filters()
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             fingerprint_mode: FpMode::Balanced,
         }
     }
@@ -761,17 +744,11 @@ mod tests {
             "local.test",
             &CosmeticFilterSet::compile(["##.ad-slot"]),
         );
-        engine
-            .live
-            .lock()
-            .await
-            .insert(id, LiveTab { page });
+        engine.live.lock().await.insert(id, LiveTab { page });
         {
             let mut tabs = engine.tabs.lock().await;
             tabs.get_mut(id).unwrap().state = TabState::Loaded;
-            tabs.get_mut(id)
-                .unwrap()
-                .push_history("https://local.test/".into(), "Local".into());
+            tabs.get_mut(id).unwrap().push_history("https://local.test/".into(), "Local".into());
         }
         assert_eq!(engine.page_data(id).await.map(|s| s.elements), Some(6));
 
@@ -799,9 +776,7 @@ mod tests {
             tabs.get_mut(b).unwrap().push_history("https://y/".into(), "Y".into());
         }
         engine.save_session().await.unwrap();
-        let loaded = session::load_session(&engine.config.profile_dir)
-            .unwrap()
-            .unwrap();
+        let loaded = session::load_session(&engine.config.profile_dir).unwrap().unwrap();
         assert_eq!(loaded.tabs.len(), 2);
         assert_eq!(loaded.next_tab_id, 3);
 
@@ -821,11 +796,16 @@ mod tests {
     async fn close_tab_removes_everything() {
         let engine = BrowserEngine::new(config()).await.unwrap();
         let id = engine.new_tab().await;
-        engine
-            .live
-            .lock()
-            .await
-            .insert(id, LiveTab { page: page::build_page("<p>x</p>", "t", &CosmeticFilterSet::compile(Vec::<String>::new())) });
+        engine.live.lock().await.insert(
+            id,
+            LiveTab {
+                page: page::build_page(
+                    "<p>x</p>",
+                    "t",
+                    &CosmeticFilterSet::compile(Vec::<String>::new()),
+                ),
+            },
+        );
         assert!(engine.close_tab(id).await);
         assert!(!engine.close_tab(id).await);
         assert_eq!(engine.tab_counts().await.blank, 0);

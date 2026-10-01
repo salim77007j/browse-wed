@@ -25,8 +25,8 @@ use std::sync::Arc;
 
 use hickory_resolver::config::{NameServerConfig, ResolverConfig};
 use hickory_resolver::net::runtime::TokioRuntimeProvider;
-use hickory_resolver::proto::rr::RecordType;
 use hickory_resolver::proto::rr::RData;
+use hickory_resolver::proto::rr::RecordType;
 use hickory_resolver::{Resolver, TokioResolver};
 
 use bw_privacy::cname::CnameChain;
@@ -84,11 +84,7 @@ impl DnsManager {
                 build_secure_resolver(&format!("https://{host}:{port}"), false).await?
             }
         };
-        Ok(Arc::new(DnsManager {
-            resolver,
-            mode,
-            stats: DnsStatsInner::default(),
-        }))
+        Ok(Arc::new(DnsManager { resolver, mode, stats: DnsStatsInner::default() }))
     }
 
     /// The configured mode.
@@ -103,11 +99,8 @@ impl DnsManager {
         if let Ok(ip) = host.parse::<IpAddr>() {
             return Ok(vec![ip]);
         }
-        let lookup = self
-            .resolver
-            .lookup_ip(host)
-            .await
-            .map_err(|e| DnsError::Lookup(e.to_string()))?;
+        let lookup =
+            self.resolver.lookup_ip(host).await.map_err(|e| DnsError::Lookup(e.to_string()))?;
         let addrs: Vec<IpAddr> = lookup.iter().collect();
         if addrs.is_empty() {
             self.stats.failures.fetch_add(1, Ordering::Relaxed);
@@ -123,8 +116,7 @@ impl DnsManager {
         let mut current = host.to_string();
         // Follow up to 8 links — beyond that the chain is pathological.
         for _ in 0..8 {
-            let Ok(lookup) = self.resolver.lookup(current.clone(), RecordType::CNAME).await
-            else {
+            let Ok(lookup) = self.resolver.lookup(current.clone(), RecordType::CNAME).await else {
                 break;
             };
             let mut next: Option<String> = None;

@@ -25,7 +25,10 @@ pub struct CnameChain {
 
 impl CnameChain {
     /// Build from an original name plus hop list.
-    pub fn new(original: impl Into<String>, hops: impl IntoIterator<Item = impl Into<String>>) -> Self {
+    pub fn new(
+        original: impl Into<String>,
+        hops: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
         CnameChain {
             original: original.into().to_ascii_lowercase(),
             hops: hops.into_iter().map(|h| h.into().to_ascii_lowercase()).collect(),
@@ -176,8 +179,8 @@ impl Uncloaker {
 
 /// Common two-label public suffixes we care about (co.uk, com.au, ...).
 const TWO_PART_TLDS: &[&str] = &[
-    "co.uk", "org.uk", "ac.uk", "gov.uk", "co.jp", "or.jp", "ne.jp", "co.kr", "com.au",
-    "net.au", "org.au", "co.nz", "com.br", "com.mx", "com.cn", "com.tw", "co.in", "co.za",
+    "co.uk", "org.uk", "ac.uk", "gov.uk", "co.jp", "or.jp", "ne.jp", "co.kr", "com.au", "net.au",
+    "org.au", "co.nz", "com.br", "com.mx", "com.cn", "com.tw", "co.in", "co.za",
 ];
 
 fn is_two_part_tld(last_two: &str) -> bool {
@@ -230,10 +233,7 @@ mod tests {
     #[test]
     fn mid_chain_trackers_detected() {
         let u = Uncloaker::with_defaults();
-        let chain = CnameChain::new(
-            "e.example.com",
-            ["alias.some-cdn.com", "tracker.criteo.net"],
-        );
+        let chain = CnameChain::new("e.example.com", ["alias.some-cdn.com", "tracker.criteo.net"]);
         assert_eq!(u.inspect(&chain).map(|r| r.tracker_domain), Some("criteo.net".into()));
     }
 

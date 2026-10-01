@@ -16,10 +16,10 @@
 // nothing (the `[[test]]` target compiles the same source with dev-deps).
 #![cfg(test)]
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use bw_api::{BrowserApi, Command, EngineOptions, Event};
 
@@ -64,11 +64,7 @@ impl LocalServer {
                     }
                     seen.fetch_add(1, Ordering::SeqCst);
                     let request_line = String::from_utf8_lossy(&buf);
-                    let path = request_line
-                        .split_whitespace()
-                        .nth(1)
-                        .unwrap_or("/")
-                        .to_string();
+                    let path = request_line.split_whitespace().nth(1).unwrap_or("/").to_string();
                     let cookie_seen = request_line.to_lowercase().contains("cookie:");
                     let route = routes.iter().find(|(p, _, _)| *p == path);
                     let (status, extra, body) = route
@@ -103,13 +99,7 @@ impl LocalServer {
 
 fn options() -> EngineOptions {
     EngineOptions {
-        profile_dir: Some(
-            tempfile::tempdir()
-                .unwrap()
-                .keep()
-                .to_string_lossy()
-                .into_owned(),
-        ),
+        profile_dir: Some(tempfile::tempdir().unwrap().keep().to_string_lossy().into_owned()),
         background_suspend_secs: 1,
         ..EngineOptions::default()
     }
@@ -126,9 +116,7 @@ async fn navigate_parses_html_into_dom() {
     let tab = api.command(Command::NewTab).await.unwrap()["tab"].as_u64().unwrap();
     let mut events = api.subscribe();
 
-    api.command(Command::Navigate { tab, url: server.url("/page") })
-        .await
-        .unwrap();
+    api.command(Command::Navigate { tab, url: server.url("/page") }).await.unwrap();
 
     match events.recv().await.unwrap() {
         Event::NavigationCompleted { outcome, .. } => {
@@ -148,23 +136,20 @@ async fn second_navigation_served_from_cache() {
         "/cached".into(),
         "200 OK",
         "<html><head><title>Cached</title></head><body>cache me</body></html>",
-    )]).await;
+    )])
+    .await;
     let api = BrowserApi::start(options()).await.unwrap();
     let tab = api.command(Command::NewTab).await.unwrap()["tab"].as_u64().unwrap();
 
     // First load: from the wire.
-    api.command(Command::Navigate { tab, url: server.url("/cached") })
-        .await
-        .unwrap();
+    api.command(Command::Navigate { tab, url: server.url("/cached") }).await.unwrap();
     let wire_hits = server.hit_count();
     assert_eq!(wire_hits, 1);
 
     // The server's response carries no cache headers; our heuristic
     // 10-minute freshness applies, so a reload within that window comes
     // from the engine's HTTP cache. Force it via a second navigate.
-    api.command(Command::Navigate { tab, url: server.url("/cached") })
-        .await
-        .unwrap();
+    api.command(Command::Navigate { tab, url: server.url("/cached") }).await.unwrap();
     let stats = api.stats().await;
     // The engine did not hit the wire a second time.
     assert_eq!(server.hit_count(), wire_hits, "cache miss went to the wire");
@@ -196,8 +181,7 @@ async fn redirects_are_followed() {
                 break;
             }
             if i == 0 {
-                let resp =
-                    "HTTP/1.1 302 Found\r\nlocation: /end\r\ncontent-length: 0\r\n\r\n";
+                let resp = "HTTP/1.1 302 Found\r\nlocation: /end\r\ncontent-length: 0\r\n\r\n";
                 sock.write_all(resp.as_bytes()).await.unwrap();
             } else {
                 let body = "<html><head><title>Final</title></head><body>ok</body></html>";
@@ -213,9 +197,7 @@ async fn redirects_are_followed() {
     let api = BrowserApi::start(options()).await.unwrap();
     let tab = api.command(Command::NewTab).await.unwrap()["tab"].as_u64().unwrap();
     let mut events = api.subscribe();
-    api.command(Command::Navigate { tab, url: format!("http://{addr}/start") })
-        .await
-        .unwrap();
+    api.command(Command::Navigate { tab, url: format!("http://{addr}/start") }).await.unwrap();
     match events.recv().await.unwrap() {
         Event::NavigationCompleted { outcome, .. } => {
             assert_eq!(outcome.status, 200);
@@ -257,11 +239,7 @@ async fn cookies_flow_back_on_second_request() {
             } else {
                 "<html><head><title>Two</title></head><body>2</body></html>".to_string()
             };
-            let set_cookie = if i == 0 {
-                "set-cookie: sid=abc; Path=/\r\n"
-            } else {
-                ""
-            };
+            let set_cookie = if i == 0 { "set-cookie: sid=abc; Path=/\r\n" } else { "" };
             let resp = format!(
                 "HTTP/1.1 200 OK\r\ncontent-type: text/html\r\n{set_cookie}content-length: {}\r\n\r\n{body}",
                 body.len()
@@ -272,18 +250,11 @@ async fn cookies_flow_back_on_second_request() {
 
     let api = BrowserApi::start(options()).await.unwrap();
     let tab = api.command(Command::NewTab).await.unwrap()["tab"].as_u64().unwrap();
-    api.command(Command::Navigate { tab, url: format!("http://{addr}/a") })
-        .await
-        .unwrap();
-    api.command(Command::Navigate { tab, url: format!("http://{addr}/b") })
-        .await
-        .unwrap();
+    api.command(Command::Navigate { tab, url: format!("http://{addr}/a") }).await.unwrap();
+    api.command(Command::Navigate { tab, url: format!("http://{addr}/b") }).await.unwrap();
     // Give the server task a moment to record the observation.
     tokio::time::sleep(Duration::from_millis(50)).await;
-    assert!(
-        seen_cookie.load(Ordering::SeqCst),
-        "second request did not carry the session cookie"
-    );
+    assert!(seen_cookie.load(Ordering::SeqCst), "second request did not carry the session cookie");
 }
 
 #[tokio::test]
@@ -291,9 +262,7 @@ async fn tracker_navigation_blocked_without_wire() {
     // Privacy preset with the starter filter list: doubleclick.net is a
     // network-filtered tracker, and no DNS/wire access must happen.
     let opts = EngineOptions {
-        profile_dir: Some(
-            tempfile::tempdir().unwrap().keep().to_string_lossy().into_owned(),
-        ),
+        profile_dir: Some(tempfile::tempdir().unwrap().keep().to_string_lossy().into_owned()),
         privacy_preset: true,
         doh_url: Some("https://dns.quad9.net/dns-query".into()),
         ..EngineOptions::default()
@@ -325,12 +294,11 @@ async fn tab_suspension_frees_page_state() {
         "/susp".into(),
         "200 OK",
         "<html><head><title>Suspend</title></head><body><p>many nodes</p></body></html>",
-    )]).await;
+    )])
+    .await;
     let api = BrowserApi::start(options()).await.unwrap();
     let tab = api.command(Command::NewTab).await.unwrap()["tab"].as_u64().unwrap();
-    api.command(Command::Navigate { tab, url: server.url("/susp") })
-        .await
-        .unwrap();
+    api.command(Command::Navigate { tab, url: server.url("/susp") }).await.unwrap();
     let before = api.tabs().await;
     assert!(before[0].current_title().is_some_and(|t| t == "Suspend"));
 
@@ -355,7 +323,8 @@ async fn session_save_and_restore() {
         "/persist".into(),
         "200 OK",
         "<html><head><title>Persist</title></head><body>session</body></html>",
-    )]).await;
+    )])
+    .await;
     let dir = tempfile::tempdir().unwrap().keep();
     let url = server.url("/persist");
     let opts = EngineOptions {
@@ -364,9 +333,7 @@ async fn session_save_and_restore() {
     };
     let api = BrowserApi::start(opts).await.unwrap();
     let tab = api.command(Command::NewTab).await.unwrap()["tab"].as_u64().unwrap();
-    api.command(Command::Navigate { tab, url: url.clone() })
-        .await
-        .unwrap();
+    api.command(Command::Navigate { tab, url: url.clone() }).await.unwrap();
     api.command(Command::SuspendTab { tab }).await.unwrap();
     api.command(Command::SaveSession).await.unwrap();
     drop(api);
@@ -410,9 +377,7 @@ async fn forty4_navigation_reports_error_state() {
     let (server, _guard) = LocalServer::spawn(vec![]).await;
     let api = BrowserApi::start(options()).await.unwrap();
     let tab = api.command(Command::NewTab).await.unwrap()["tab"].as_u64().unwrap();
-    api.command(Command::Navigate { tab, url: server.url("/missing") })
-        .await
-        .unwrap();
+    api.command(Command::Navigate { tab, url: server.url("/missing") }).await.unwrap();
     let tabs = api.tabs().await;
     // 404 keeps the URL in history (browsers keep it; state stays usable).
     assert!(tabs[0].current_url().is_some());
@@ -421,25 +386,14 @@ async fn forty4_navigation_reports_error_state() {
 #[tokio::test]
 async fn back_and_forward_through_history() {
     let (server, _guard) = LocalServer::spawn(vec![
-        (
-            "/one".into(),
-            "200 OK",
-            "<html><head><title>One</title></head><body>1</body></html>",
-        ),
-        (
-            "/two".into(),
-            "200 OK",
-            "<html><head><title>Two</title></head><body>2</body></html>",
-        ),
-    ]).await;
+        ("/one".into(), "200 OK", "<html><head><title>One</title></head><body>1</body></html>"),
+        ("/two".into(), "200 OK", "<html><head><title>Two</title></head><body>2</body></html>"),
+    ])
+    .await;
     let api = BrowserApi::start(options()).await.unwrap();
     let tab = api.command(Command::NewTab).await.unwrap()["tab"].as_u64().unwrap();
-    api.command(Command::Navigate { tab, url: server.url("/one") })
-        .await
-        .unwrap();
-    api.command(Command::Navigate { tab, url: server.url("/two") })
-        .await
-        .unwrap();
+    api.command(Command::Navigate { tab, url: server.url("/one") }).await.unwrap();
+    api.command(Command::Navigate { tab, url: server.url("/two") }).await.unwrap();
     let tabs = api.tabs().await;
     assert_eq!(tabs[0].current_url(), Some(server.url("/two").as_str()));
 

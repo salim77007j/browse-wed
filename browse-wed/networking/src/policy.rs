@@ -158,10 +158,7 @@ impl PolicyEngine {
     /// decision.
     pub fn check_uncloaked(&self, ctx: &RequestContext, chain: &CnameChain) -> PolicyVerdict {
         let report = {
-            let uncloaker = self
-                .uncloaker
-                .read()
-                .expect("uncloaker lock poisoned");
+            let uncloaker = self.uncloaker.read().expect("uncloaker lock poisoned");
             uncloaker.inspect(chain)
         };
         let Some(report) = report else {
@@ -259,10 +256,7 @@ impl PolicyEngine {
             .unwrap_or(0);
         self.hsts.write().expect("hsts lock poisoned").insert(
             host.to_string(),
-            HstsEntry {
-                include_subdomains,
-                expires_unix: now.saturating_add(max_age),
-            },
+            HstsEntry { include_subdomains, expires_unix: now.saturating_add(max_age) },
         );
     }
 
@@ -273,9 +267,7 @@ impl PolicyEngine {
             .map(|d| d.as_secs())
             .unwrap_or(0);
         let map = self.alt_svc.read().expect("alt-svc lock poisoned");
-        map.get(origin)
-            .filter(|e| e.expires_unix > now)
-            .map(|e| e.authority.clone())
+        map.get(origin).filter(|e| e.expires_unix > now).map(|e| e.authority.clone())
     }
 
     /// Learn Alt-Svc from a response header value for `origin`.
@@ -289,10 +281,7 @@ impl PolicyEngine {
             .unwrap_or(0);
         self.alt_svc.write().expect("alt-svc lock poisoned").insert(
             origin.to_string(),
-            AltSvcEntry {
-                authority,
-                expires_unix: now.saturating_add(max_age.unwrap_or(3600)),
-            },
+            AltSvcEntry { authority, expires_unix: now.saturating_add(max_age.unwrap_or(3600)) },
         );
     }
 
@@ -320,10 +309,7 @@ pub fn is_loopback(host: &str) -> bool {
 pub fn parse_max_age(value: &str) -> Option<u64> {
     for part in value.split(';') {
         let part = part.trim();
-        if let Some(num) = part
-            .to_ascii_lowercase()
-            .strip_prefix("max-age=")
-        {
+        if let Some(num) = part.to_ascii_lowercase().strip_prefix("max-age=") {
             if let Ok(secs) = num.trim().parse::<u64>() {
                 return Some(secs);
             }
@@ -353,11 +339,7 @@ pub fn parse_alt_svc(value: &str) -> Option<(String, Option<u64>)> {
             .map(|(_, a)| a.trim().trim_matches('"').to_string())
             .unwrap_or_default();
         // Authority is either `:port`, `host` (default port) or `host:port`.
-        let authority = if authority.is_empty() {
-            ":443".to_string()
-        } else {
-            authority
-        };
+        let authority = if authority.is_empty() { ":443".to_string() } else { authority };
         let mut max_age = None;
         for attr in parts {
             let attr = attr.trim();
@@ -450,7 +432,8 @@ mod tests {
         };
         db.add_full_hash(full);
         let config = NetworkConfig::default();
-        let e = PolicyEngine::new(&config, Arc::new(FilterSet::from_filters(Vec::new())), Arc::new(db));
+        let e =
+            PolicyEngine::new(&config, Arc::new(FilterSet::from_filters(Vec::new())), Arc::new(db));
         let c = ctx(url, "mail.example", ResourceType::DOCUMENT);
         assert_eq!(e.check(&c, true), PolicyVerdict::Warn(BlockReason::SafeBrowsing));
         assert_eq!(e.check(&c, false), PolicyVerdict::Block(BlockReason::SafeBrowsing));
@@ -507,11 +490,11 @@ mod tests {
 
     #[test]
     fn alt_svc_value_parsing() {
-        assert_eq!(
-            parse_alt_svc("h3=\":443\"; ma=86400"),
-            Some((":443".into(), Some(86400)))
-        );
+        assert_eq!(parse_alt_svc("h3=\":443\"; ma=86400"), Some((":443".into(), Some(86400))));
         assert_eq!(parse_alt_svc("h3-29=\":443\""), None);
-        assert_eq!(parse_alt_svc("h3=\"alt.example:8443\""), Some(("alt.example:8443".into(), None)));
+        assert_eq!(
+            parse_alt_svc("h3=\"alt.example:8443\""),
+            Some(("alt.example:8443".into(), None))
+        );
     }
 }

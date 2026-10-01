@@ -14,7 +14,7 @@ use redb::{ReadableDatabase, ReadableTable};
 use serde::{Deserialize, Serialize};
 
 use crate::keyspace;
-use crate::{IDB_META, IDB_RECORDS, Result};
+use crate::{Result, IDB_META, IDB_RECORDS};
 
 /// Metadata for one IDB database.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,12 +43,7 @@ pub struct KeyRange {
 impl KeyRange {
     /// Full-range scan.
     pub fn all() -> KeyRange {
-        KeyRange {
-            lower: None,
-            upper: None,
-            lower_inclusive: true,
-            upper_inclusive: true,
-        }
+        KeyRange { lower: None, upper: None, lower_inclusive: true, upper_inclusive: true }
     }
 
     /// `IDBKeyRange.bound(lower, upper, lower_open, upper_open)`.
@@ -104,7 +99,8 @@ impl IdbDb {
 
     /// Delete an object store with all its records.
     pub fn delete_store(&mut self, store: &str) -> Result<()> {
-        let prefix = keyspace::idb_store_prefix(&self.partition, &self.origin, &self.meta.name, store);
+        let prefix =
+            keyspace::idb_store_prefix(&self.partition, &self.origin, &self.meta.name, store);
         let upper = keyspace::prefix_upper(&prefix);
         let tx = self.db_begin_write()?;
         {
@@ -179,7 +175,8 @@ impl IdbDb {
     /// Clear all records of one store.
     pub fn clear(&self, store: &str) -> Result<()> {
         self.ensure_store(store)?;
-        let prefix = keyspace::idb_store_prefix(&self.partition, &self.origin, &self.meta.name, store);
+        let prefix =
+            keyspace::idb_store_prefix(&self.partition, &self.origin, &self.meta.name, store);
         let upper = keyspace::prefix_upper(&prefix);
         let tx = self.db_begin_write()?;
         {
@@ -207,13 +204,11 @@ impl IdbDb {
     /// primary key (matching IDB key order for homogeneous stores).
     pub fn scan(&self, store: &str, range: &KeyRange) -> Result<Vec<(String, Vec<u8>)>> {
         self.ensure_store(store)?;
-        let prefix = keyspace::idb_store_prefix(&self.partition, &self.origin, &self.meta.name, store);
+        let prefix =
+            keyspace::idb_store_prefix(&self.partition, &self.origin, &self.meta.name, store);
         let upper_bound = match (&range.upper, range.upper_inclusive) {
             (None, _) => keyspace::prefix_upper(&prefix),
-            (Some(u), true) => keyspace::prefix_upper(&keyspace::join(&[
-                &prefix,
-                u,
-            ])),
+            (Some(u), true) => keyspace::prefix_upper(&keyspace::join(&[&prefix, u])),
             (Some(u), false) => {
                 let k = keyspace::join(&[&prefix, u]);
                 keyspace::prefix_upper(&k)
@@ -237,11 +232,7 @@ impl IdbDb {
             let (k, v) = row?;
             let full = k.value().to_string();
             // strip prefix + separator to recover the user key
-            let pk = full
-                .splitn(5, '\u{1f}')
-                .nth(4)
-                .map(|s| s.to_string())
-                .unwrap_or_default();
+            let pk = full.splitn(5, '\u{1f}').nth(4).map(|s| s.to_string()).unwrap_or_default();
             out.push((pk, v.value().to_vec()));
         }
         Ok(out)
@@ -300,12 +291,12 @@ pub struct Idb {
 
 impl Idb {
     /// Bind a namespace. Created by [`crate::Storage::indexed_db`].
-    pub fn new(db: std::sync::Arc<redb::Database>, partition: impl Into<String>, origin: impl Into<String>) -> Idb {
-        Idb {
-            db,
-            partition: partition.into(),
-            origin: origin.into(),
-        }
+    pub fn new(
+        db: std::sync::Arc<redb::Database>,
+        partition: impl Into<String>,
+        origin: impl Into<String>,
+    ) -> Idb {
+        Idb { db, partition: partition.into(), origin: origin.into() }
     }
 
     /// List database names for this origin.
@@ -336,20 +327,14 @@ impl Idb {
         let existing: Option<DbMeta> = {
             let tx = self.db.begin_read()?;
             match tx.open_table(IDB_META) {
-                Ok(t) => t
-                    .get(key.as_str())?
-                    .and_then(|v| serde_json::from_str(v.value()).ok()),
+                Ok(t) => t.get(key.as_str())?.and_then(|v| serde_json::from_str(v.value()).ok()),
                 Err(redb::TableError::TableDoesNotExist(_)) => None,
                 Err(e) => return Err(e.into()),
             }
         };
         let meta = match existing {
             Some(m) => m,
-            None => DbMeta {
-                name: name.to_string(),
-                version,
-                stores: Vec::new(),
-            },
+            None => DbMeta { name: name.to_string(), version, stores: Vec::new() },
         };
         Ok(IdbDb {
             db: std::sync::Arc::clone(&self.db),
@@ -399,11 +384,10 @@ mod tests {
 
     fn idb(tag: &str) -> (Idb, tempfile::TempDir) {
         let dir = tempfile::tempdir().unwrap();
-        let db = std::sync::Arc::new(redb::Database::create(dir.path().join(format!("{tag}.redb"))).unwrap());
-        (
-            Idb::new(db, "top.example", "https://app.example"),
-            dir,
-        )
+        let db = std::sync::Arc::new(
+            redb::Database::create(dir.path().join(format!("{tag}.redb"))).unwrap(),
+        );
+        (Idb::new(db, "top.example", "https://app.example"), dir)
     }
 
     #[test]

@@ -47,11 +47,7 @@ pub enum SimpleSelector {
     /// `.ad-slot`
     Class(String),
     /// `[href]`, `[href^="https"]`, `[data-x=y]`
-    Attr {
-        name: String,
-        op: AttrOp,
-        value: String,
-    },
+    Attr { name: String, op: AttrOp, value: String },
     /// `:contains(text)` — matched against the node's text content.
     Contains(String),
 }
@@ -155,11 +151,7 @@ impl Selector {
                                 }
                                 val.push(c3);
                             }
-                            let val = val
-                                .trim()
-                                .trim_matches('"')
-                                .trim_matches('\'')
-                                .to_string();
+                            let val = val.trim().trim_matches('"').trim_matches('\'').to_string();
                             if buf.eq_ignore_ascii_case("contains") {
                                 current.simples.push(SimpleSelector::Contains(val));
                             }
@@ -278,14 +270,16 @@ fn compound_matches<D: DomView>(c: &Compound, dom: &D, node: D::NodeId) -> bool 
         let ok = match simple {
             SimpleSelector::Type(t) => dom.tag(node).is_some_and(|tg| tg.eq_ignore_ascii_case(t)),
             SimpleSelector::Id(id) => dom.attr(node, "id").is_some_and(|v| v == id),
-            SimpleSelector::Class(cls) => dom
-                .attr(node, "class")
-                .is_some_and(|v| v.split_whitespace().any(|c| c == cls)),
+            SimpleSelector::Class(cls) => {
+                dom.attr(node, "class").is_some_and(|v| v.split_whitespace().any(|c| c == cls))
+            }
             SimpleSelector::Attr { name, op, value } => match op {
-                AttrOp::Present => dom.attr(node, name).is_some() || {
-                    let lower = name.to_ascii_lowercase();
-                    dom.attrs(node).iter().any(|(n, _)| n.eq_ignore_ascii_case(&lower))
-                },
+                AttrOp::Present => {
+                    dom.attr(node, name).is_some() || {
+                        let lower = name.to_ascii_lowercase();
+                        dom.attrs(node).iter().any(|(n, _)| n.eq_ignore_ascii_case(&lower))
+                    }
+                }
                 AttrOp::Equals => dom.attr(node, name).is_some_and(|v| v == value),
                 AttrOp::Prefix => dom.attr(node, name).is_some_and(|v| v.starts_with(value)),
                 AttrOp::Suffix => dom.attr(node, name).is_some_and(|v| v.ends_with(value)),
@@ -306,11 +300,7 @@ fn parse_attr(buf: &str) -> Result<SimpleSelector, FilterError> {
     let (name_part, value, has_value) = match eq {
         Some(idx) => (
             &buf[..idx],
-            buf[idx + 1..]
-                .trim()
-                .trim_matches('"')
-                .trim_matches('\'')
-                .to_string(),
+            buf[idx + 1..].trim().trim_matches('"').trim_matches('\'').to_string(),
             true,
         ),
         None => (buf, String::new(), false),
@@ -325,11 +315,7 @@ fn parse_attr(buf: &str) -> Result<SimpleSelector, FilterError> {
         return Err(FilterError::BadRule(buf.to_string()));
     }
     let op = if !has_value { AttrOp::Present } else { op };
-    Ok(SimpleSelector::Attr {
-        name: name.to_ascii_lowercase(),
-        op,
-        value,
-    })
+    Ok(SimpleSelector::Attr { name: name.to_ascii_lowercase(), op, value })
 }
 
 /// Parse a comma-separated selector list.
@@ -518,12 +504,7 @@ pub fn parse_cosmetic_line(line: &str) -> Option<CosmeticRule> {
 
     let selectors = parse_selector_list(selector_part).unwrap_or_default();
 
-    Some(CosmeticRule {
-        hosts,
-        selectors,
-        exception,
-        raw: line.to_string(),
-    })
+    Some(CosmeticRule { hosts, selectors, exception, raw: line.to_string() })
 }
 
 #[cfg(test)]
@@ -540,7 +521,14 @@ mod tests {
     }
 
     impl TestDom {
-        fn add(&mut self, id: u32, tag: &str, parent: Option<u32>, attrs: &[(&str, &str)], text: &str) {
+        fn add(
+            &mut self,
+            id: u32,
+            tag: &str,
+            parent: Option<u32>,
+            attrs: &[(&str, &str)],
+            text: &str,
+        ) {
             self.nodes.insert(
                 id,
                 (
@@ -560,10 +548,7 @@ mod tests {
         }
         fn attr(&self, id: u32, name: &str) -> Option<&str> {
             let (_, attrs, _, _) = self.nodes.get(&id)?;
-            attrs
-                .iter()
-                .find(|(k, _)| k.eq_ignore_ascii_case(name))
-                .map(|(_, v)| v.as_str())
+            attrs.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v.as_str())
         }
         fn attrs(&self, id: u32) -> Vec<(String, String)> {
             self.nodes.get(&id).map(|(_, a, _, _)| a.clone()).unwrap_or_default()
@@ -617,7 +602,8 @@ mod tests {
 
     #[test]
     fn attribute_selectors() {
-        let set = CosmeticFilterSet::compile(["##[data-tag=sponsor]", "##a[href^=\"https://example\"]"]);
+        let set =
+            CosmeticFilterSet::compile(["##[data-tag=sponsor]", "##a[href^=\"https://example\"]"]);
         let d = dom();
         let nodes = [4u32, 5u32];
         let mut hidden = set.hidden_nodes("x.com", &d, &nodes);

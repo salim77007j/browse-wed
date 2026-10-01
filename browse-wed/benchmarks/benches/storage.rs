@@ -28,12 +28,13 @@ fn cookie(name: &str, domain: &str, partition: Option<&str>) -> Cookie {
 fn jar_with(n: usize) -> CookieJar {
     let mut jar = CookieJar::new();
     for i in 0..n {
-        let domain = if i % 3 == 0 {
-            "site.example".to_string()
-        } else {
-            format!("t{i}.cdn.example")
-        };
-        jar.set(cookie(&format!("k{i}"), &domain, if i % 2 == 0 { None } else { Some("site.example") }));
+        let domain =
+            if i % 3 == 0 { "site.example".to_string() } else { format!("t{i}.cdn.example") };
+        jar.set(cookie(
+            &format!("k{i}"),
+            &domain,
+            if i % 2 == 0 { None } else { Some("site.example") },
+        ));
     }
     jar
 }
@@ -44,14 +45,10 @@ fn bench_storage(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("cookie_get_for");
     group.bench_function("50_cookies_first_party", |b| {
-        b.iter(|| {
-            jar_50.get_for("https://site.example/page", "site.example", true)
-        });
+        b.iter(|| jar_50.get_for("https://site.example/page", "site.example", true));
     });
     group.bench_function("1000_cookies_first_party", |b| {
-        b.iter(|| {
-            jar_1000.get_for("https://site.example/page", "site.example", true)
-        });
+        b.iter(|| jar_1000.get_for("https://site.example/page", "site.example", true));
     });
     group.finish();
 
@@ -85,7 +82,12 @@ fn bench_storage(c: &mut Criterion) {
         let mut i = 0usize;
         b.iter(|| {
             i += 1;
-            cache.put(&format!("https://cdn.example/w/{i}.js"), None, meta(body.len()), body.clone());
+            cache.put(
+                &format!("https://cdn.example/w/{i}.js"),
+                None,
+                meta(body.len()),
+                body.clone(),
+            );
         });
     });
     group.bench_function("get_hit_1000_entries", |b| {

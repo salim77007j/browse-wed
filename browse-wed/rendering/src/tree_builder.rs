@@ -16,21 +16,45 @@ use crate::html_tokenizer::{tokenize, Token};
 
 /// Elements that never have children.
 const VOID_ELEMENTS: &[&str] = &[
-    "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param",
-    "source", "track", "wbr",
+    "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source",
+    "track", "wbr",
 ];
 
 /// Block-level elements that close an open `<p>`.
 const BLOCK_ELEMENTS: &[&str] = &[
-    "address", "article", "aside", "blockquote", "div", "dl", "fieldset", "figcaption", "figure",
-    "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6", "header", "hr", "main", "nav", "ol",
-    "p", "pre", "section", "table", "ul",
+    "address",
+    "article",
+    "aside",
+    "blockquote",
+    "div",
+    "dl",
+    "fieldset",
+    "figcaption",
+    "figure",
+    "footer",
+    "form",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "header",
+    "hr",
+    "main",
+    "nav",
+    "ol",
+    "p",
+    "pre",
+    "section",
+    "table",
+    "ul",
 ];
 
 /// Elements whose end tag closes the whole stack down to them.
 const SCOPE_ELEMENTS: &[&str] = &[
-    "html", "body", "head", "table", "tbody", "thead", "tfoot", "tr", "td", "th", "ul", "ol",
-    "li", "select", "option", "form", "div", "p",
+    "html", "body", "head", "table", "tbody", "thead", "tfoot", "tr", "td", "th", "ul", "ol", "li",
+    "select", "option", "form", "div", "p",
 ];
 
 /// Parse HTML into a DOM.
@@ -48,14 +72,10 @@ pub fn build_tree(tokens: Vec<Token>) -> Document {
         doc.root(),
         NodeKind::Element(ElementData { tag: "html".into(), attrs: vec![] }),
     );
-    let head = doc.append_new(
-        html,
-        NodeKind::Element(ElementData { tag: "head".into(), attrs: vec![] }),
-    );
-    let body = doc.append_new(
-        html,
-        NodeKind::Element(ElementData { tag: "body".into(), attrs: vec![] }),
-    );
+    let head =
+        doc.append_new(html, NodeKind::Element(ElementData { tag: "head".into(), attrs: vec![] }));
+    let body =
+        doc.append_new(html, NodeKind::Element(ElementData { tag: "body".into(), attrs: vec![] }));
 
     let mut stack: Vec<NodeId> = vec![head];
     let mut mode = Mode::Head;
@@ -160,10 +180,7 @@ enum Mode {
 }
 
 fn is_head_tag(tag: &str) -> bool {
-    matches!(
-        tag,
-        "title" | "meta" | "link" | "style" | "script" | "base" | "noscript" | "template"
-    )
+    matches!(tag, "title" | "meta" | "link" | "style" | "script" | "base" | "noscript" | "template")
 }
 
 /// Elements whose content is raw text (tokenizer never tags inside them).
@@ -222,10 +239,7 @@ mod tests {
     #[test]
     fn nested_structure() {
         let doc = parse_html("<div id=\"a\"><p>one</p><p>two</p></div>");
-        let body = doc
-            .traverse()
-            .find(|&n| doc.tag_of(n) == Some("body"))
-            .unwrap();
+        let body = doc.traverse().find(|&n| doc.tag_of(n) == Some("body")).unwrap();
         let div = doc.children(body).next().unwrap();
         assert_eq!(doc.element(div).unwrap().attr("id"), Some("a"));
         let ps: Vec<NodeId> = doc.children(div).collect();
@@ -247,10 +261,7 @@ mod tests {
     fn implicit_p_closing() {
         let doc = parse_html("<p>one<p>two");
         let body = doc.traverse().find(|&n| doc.tag_of(n) == Some("body")).unwrap();
-        let ps: Vec<NodeId> = doc
-            .children(body)
-            .filter(|&c| doc.tag_of(c) == Some("p"))
-            .collect();
+        let ps: Vec<NodeId> = doc.children(body).filter(|&c| doc.tag_of(c) == Some("p")).collect();
         assert_eq!(ps.len(), 2);
         assert_eq!(doc.inner_text(ps[0]), "one");
         assert_eq!(doc.inner_text(ps[1]), "two");
@@ -269,10 +280,7 @@ mod tests {
         let head = doc.traverse().find(|&n| doc.tag_of(n) == Some("head")).unwrap();
         assert!(doc.inner_text(head).contains("My page"));
         assert_eq!(doc.title(), Some("My page".to_string()));
-        let metas: Vec<_> = doc
-            .children(head)
-            .filter(|&c| doc.tag_of(c) == Some("meta"))
-            .collect();
+        let metas: Vec<_> = doc.children(head).filter(|&c| doc.tag_of(c) == Some("meta")).collect();
         assert_eq!(metas.len(), 1);
     }
 
@@ -287,10 +295,7 @@ mod tests {
     #[test]
     fn tables_keep_basic_shape() {
         let doc = parse_html("<table><tr><td>a</td><td>b</td></tr></table>");
-        let cells: Vec<_> = doc
-            .traverse()
-            .filter(|&n| doc.tag_of(n) == Some("td"))
-            .collect();
+        let cells: Vec<_> = doc.traverse().filter(|&n| doc.tag_of(n) == Some("td")).collect();
         assert_eq!(cells.len(), 2);
     }
 }

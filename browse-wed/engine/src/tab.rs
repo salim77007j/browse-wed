@@ -86,16 +86,12 @@ impl TabEntry {
 
     /// The current URL, if any.
     pub fn current_url(&self) -> Option<&str> {
-        self.history_cursor
-            .and_then(|i| self.history.get(i))
-            .map(|e| e.url.as_str())
+        self.history_cursor.and_then(|i| self.history.get(i)).map(|e| e.url.as_str())
     }
 
     /// The current title, if any.
     pub fn current_title(&self) -> Option<&str> {
-        self.history_cursor
-            .and_then(|i| self.history.get(i))
-            .map(|e| e.title.as_str())
+        self.history_cursor.and_then(|i| self.history.get(i)).map(|e| e.title.as_str())
     }
 
     /// Push a new history entry (truncating any forward entries).
@@ -188,10 +184,7 @@ fn cur_title_patch(tab: &mut TabEntry, title: &str) {
 }
 
 fn unix_now_secs() -> u64 {
-    SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
+    SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
 /// The registry over all tabs.

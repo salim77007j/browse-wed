@@ -32,10 +32,7 @@ pub struct MemorySnapshot {
 impl MemorySnapshot {
     /// Read the current system state.
     pub fn read() -> MemorySnapshot {
-        MemorySnapshot {
-            total_bytes: total_ram_bytes(),
-            available_bytes: available_ram_bytes(),
-        }
+        MemorySnapshot { total_bytes: total_ram_bytes(), available_bytes: available_ram_bytes() }
     }
 
     /// Available RAM, falling back to a fraction of total (kernels lie).
@@ -89,12 +86,7 @@ pub fn available_ram_bytes() -> u64 {
         if let Ok(info) = std::fs::read_to_string("/proc/meminfo") {
             for line in info.lines() {
                 if let Some(rest) = line.strip_prefix("MemAvailable:") {
-                    let kb: u64 = rest
-                        .trim()
-                        .trim_end_matches("kB")
-                        .trim()
-                        .parse()
-                        .unwrap_or(0);
+                    let kb: u64 = rest.trim().trim_end_matches("kB").trim().parse().unwrap_or(0);
                     return kb * 1024;
                 }
             }
@@ -133,9 +125,7 @@ pub fn available_ram_bytes() -> u64 {
 }
 
 #[cfg(windows)]
-use windows_sys::Win32::System::SystemInformation::{
-    GlobalMemoryStatusEx, MEMORYSTATUSEX,
-};
+use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
 
 /// Governor policy knobs.
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
@@ -175,10 +165,7 @@ pub struct MemoryGovernor {
 impl MemoryGovernor {
     /// Measure the system and build the governor.
     pub fn new(policy: GovernorPolicy) -> MemoryGovernor {
-        MemoryGovernor {
-            policy,
-            snapshot: MemorySnapshot::read(),
-        }
+        MemoryGovernor { policy, snapshot: MemorySnapshot::read() }
     }
 
     /// Re-measure the system (called by the periodic sweeper).
@@ -267,10 +254,7 @@ pub fn unix_now() -> SystemTime {
 
 /// Seconds since the epoch (for persistence formats).
 pub fn unix_now_secs() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
 #[cfg(test)]

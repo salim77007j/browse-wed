@@ -132,10 +132,7 @@ impl JsEngine {
                 reply: reply_tx,
             })
             .map_err(|_| JsEngineError::WorkerGone)?;
-        reply_rx
-            .recv()
-            .map_err(|_| JsEngineError::WorkerGone)?
-            .map_err(JsEngineError::Script)
+        reply_rx.recv().map_err(|_| JsEngineError::WorkerGone)?.map_err(JsEngineError::Script)
     }
 
     /// Drop a site's runtime (tab suspension path). Returns true when a
@@ -151,9 +148,7 @@ impl JsEngine {
     /// Run GC on every live runtime.
     pub fn gc_all(&self) -> Result<(), JsEngineError> {
         let (reply_tx, reply_rx) = mpsc::channel();
-        self.tx
-            .send(Command::GcAll { reply: reply_tx })
-            .map_err(|_| JsEngineError::WorkerGone)?;
+        self.tx.send(Command::GcAll { reply: reply_tx }).map_err(|_| JsEngineError::WorkerGone)?;
         reply_rx.recv().map_err(|_| JsEngineError::WorkerGone)
     }
 
@@ -174,9 +169,7 @@ impl JsEngine {
     /// Engine-level statistics.
     pub fn stats(&self) -> Result<JsEngineStats, JsEngineError> {
         let (reply_tx, reply_rx) = mpsc::channel();
-        self.tx
-            .send(Command::Stats { reply: reply_tx })
-            .map_err(|_| JsEngineError::WorkerGone)?;
+        self.tx.send(Command::Stats { reply: reply_tx }).map_err(|_| JsEngineError::WorkerGone)?;
         reply_rx.recv().map_err(|_| JsEngineError::WorkerGone)
     }
 }
@@ -235,10 +228,7 @@ impl Worker {
         } else {
             touch_lru(&mut self.lru, site);
         }
-        self.runtimes
-            .get(site)
-            .expect("runtime just inserted")
-            .exec_with_timeout(source, timeout)
+        self.runtimes.get(site).expect("runtime just inserted").exec_with_timeout(source, timeout)
     }
 
     /// Evict LRU victims while at capacity (caller inserts after).
@@ -274,10 +264,7 @@ impl Worker {
     }
 
     fn heap_stats(&self) -> Vec<(String, HeapStats)> {
-        self.runtimes
-            .iter()
-            .map(|(site, rt)| (site.clone(), rt.stats()))
-            .collect()
+        self.runtimes.iter().map(|(site, rt)| (site.clone(), rt.stats())).collect()
     }
 
     fn stats(&self) -> JsEngineStats {
@@ -331,9 +318,7 @@ mod tests {
     #[test]
     fn suspension_drops_heap() {
         let engine = JsEngine::new(RuntimeLimits::default());
-        engine
-            .exec("https://heavy.example", "globalThis.x = new Array(100000).fill(1);")
-            .unwrap();
+        engine.exec("https://heavy.example", "globalThis.x = new Array(100000).fill(1);").unwrap();
         let before = engine.total_heap_bytes().unwrap();
         assert!(before > 0);
         assert!(engine.suspend_site("https://heavy.example").unwrap());

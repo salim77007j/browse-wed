@@ -9,7 +9,9 @@
 use std::fmt;
 
 /// Handle to a node inside a [`Document`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub struct NodeId(pub(crate) u32);
 
 impl NodeId {
@@ -42,17 +44,12 @@ pub struct ElementData {
 impl ElementData {
     /// Attribute lookup, case-insensitive name match.
     pub fn attr(&self, name: &str) -> Option<&str> {
-        self.attrs
-            .iter()
-            .find(|(k, _)| k.eq_ignore_ascii_case(name))
-            .map(|(_, v)| v.as_str())
+        self.attrs.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v.as_str())
     }
 
     /// The `class` attribute split on whitespace.
     pub fn classes(&self) -> Vec<&str> {
-        self.attr("class")
-            .map(|c| c.split_whitespace().collect())
-            .unwrap_or_default()
+        self.attr("class").map(|c| c.split_whitespace().collect()).unwrap_or_default()
     }
 
     /// The `id` attribute, when present.
@@ -197,18 +194,12 @@ impl Document {
 
     /// Iterate children of a node.
     pub fn children(&self, id: NodeId) -> Children<'_> {
-        Children {
-            doc: self,
-            next: self.get(id).first_child,
-        }
+        Children { doc: self, next: self.get(id).first_child }
     }
 
     /// Depth-first pre-order iterator over the whole tree.
     pub fn traverse(&self) -> Traverse<'_> {
-        Traverse {
-            doc: self,
-            stack: vec![self.root()],
-        }
+        Traverse { doc: self, stack: vec![self.root()] }
     }
 
     /// Tag name of a node, if it is an element.
@@ -248,10 +239,7 @@ impl Document {
 
     /// Pre-order traversal of a subtree rooted at `id`.
     pub fn traverse_subtree(&self, id: NodeId) -> Traverse<'_> {
-        Traverse {
-            doc: self,
-            stack: vec![id],
-        }
+        Traverse { doc: self, stack: vec![id] }
     }
 
     /// Find the first `<title>` text (for the tab title).
@@ -271,9 +259,7 @@ impl Document {
 
     /// Collect all element ids (helper for cosmetic filtering).
     pub fn all_elements(&self) -> Vec<NodeId> {
-        self.traverse()
-            .filter(|&n| self.element(n).is_some())
-            .collect()
+        self.traverse().filter(|&n| self.element(n).is_some()).collect()
     }
 }
 
@@ -335,11 +321,7 @@ fn write_node(f: &mut fmt::Formatter<'_>, doc: &Document, id: NodeId, depth: usi
         NodeKind::Comment(c) => writeln!(f, "{indent}<!--{c}-->"),
         NodeKind::Text(t) => writeln!(f, "{indent}{t}"),
         NodeKind::Element(e) => {
-            let attrs = e
-                .attrs
-                .iter()
-                .map(|(k, v)| format!(" {k}=\"{v}\""))
-                .collect::<String>();
+            let attrs = e.attrs.iter().map(|(k, v)| format!(" {k}=\"{v}\"")).collect::<String>();
             writeln!(f, "{indent}<{}{attrs}>", e.tag)?;
             for c in doc.children(id) {
                 write_node(f, doc, c, depth + 1)?;
@@ -358,18 +340,10 @@ mod tests {
         let mut doc = Document::new();
         let html = doc.append_new(
             doc.root(),
-            NodeKind::Element(ElementData {
-                tag: "html".into(),
-                attrs: vec![],
-            }),
+            NodeKind::Element(ElementData { tag: "html".into(), attrs: vec![] }),
         );
-        let body = doc.append_new(
-            html,
-            NodeKind::Element(ElementData {
-                tag: "body".into(),
-                attrs: vec![],
-            }),
-        );
+        let body = doc
+            .append_new(html, NodeKind::Element(ElementData { tag: "body".into(), attrs: vec![] }));
         doc.append_new(body, NodeKind::Text("Hello".into()));
         assert_eq!(doc.len(), 4);
         assert_eq!(doc.tag_of(body), Some("body"));
@@ -381,10 +355,7 @@ mod tests {
         let mut doc = Document::new();
         let div = doc.append_new(
             doc.root(),
-            NodeKind::Element(ElementData {
-                tag: "div".into(),
-                attrs: vec![],
-            }),
+            NodeKind::Element(ElementData { tag: "div".into(), attrs: vec![] }),
         );
         doc.append_new(div, NodeKind::Text("x".into()));
         doc.detach(div);
@@ -396,14 +367,18 @@ mod tests {
     #[test]
     fn traversal_is_preorder() {
         let mut doc = Document::new();
-        let a = doc.append_new(doc.root(), NodeKind::Element(ElementData { tag: "a".into(), attrs: vec![] }));
-        let b = doc.append_new(doc.root(), NodeKind::Element(ElementData { tag: "b".into(), attrs: vec![] }));
+        let a = doc.append_new(
+            doc.root(),
+            NodeKind::Element(ElementData { tag: "a".into(), attrs: vec![] }),
+        );
+        let b = doc.append_new(
+            doc.root(),
+            NodeKind::Element(ElementData { tag: "b".into(), attrs: vec![] }),
+        );
         doc.append_new(a, NodeKind::Text("1".into()));
         doc.append_new(b, NodeKind::Text("2".into()));
-        let tags: Vec<String> = doc
-            .traverse()
-            .filter_map(|n| doc.tag_of(n).map(|s| s.to_string()))
-            .collect();
+        let tags: Vec<String> =
+            doc.traverse().filter_map(|n| doc.tag_of(n).map(|s| s.to_string())).collect();
         assert_eq!(tags, vec!["a", "b"]);
     }
 }

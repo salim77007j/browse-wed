@@ -42,10 +42,7 @@ pub struct CacheMeta {
 impl CacheMeta {
     /// True when the entry is fresh at `now`.
     pub fn is_fresh(&self, now: SystemTime) -> bool {
-        let now = now
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+        let now = now.duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         self.expires_unix > now
     }
 }
@@ -230,11 +227,7 @@ fn evict_to_budget(inner: &mut CacheInner, budget: usize) {
 }
 
 fn hex(bytes: impl AsRef<[u8]>) -> String {
-    bytes
-        .as_ref()
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
+    bytes.as_ref().iter().map(|b| format!("{b:02x}")).collect()
 }
 
 // Silence unused import when NonZeroUsize path changes.
@@ -251,17 +244,11 @@ mod tests {
             content_type: "text/html".into(),
             etag: Some("\"x1\"".into()),
             last_modified: None,
-            expires_unix: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
+            expires_unix: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
                 + expires_in,
             vary: vec![],
             body_len: 0,
-            stored_at_unix: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+            stored_at_unix: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
         }
     }
 

@@ -65,10 +65,7 @@ impl DomView for PageDom<'_> {
     }
 
     fn attrs(&self, id: Self::NodeId) -> Vec<(String, String)> {
-        self.0
-            .element(id)
-            .map(|e| e.attrs.clone())
-            .unwrap_or_default()
+        self.0.element(id).map(|e| e.attrs.clone()).unwrap_or_default()
     }
 
     fn parent(&self, id: Self::NodeId) -> Option<Self::NodeId> {
@@ -98,11 +95,8 @@ pub fn build_page(html: &str, host: &str, cosmetics: &CosmeticFilterSet) -> Page
     let all_elements = doc.all_elements();
     let dom = PageDom(&doc);
     let hidden = cosmetics.hidden_nodes(host, &dom, &all_elements);
-    let mut stats = PageStats {
-        nodes: doc.len(),
-        elements: all_elements.len(),
-        ..PageStats::default()
-    };
+    let mut stats =
+        PageStats { nodes: doc.len(), elements: all_elements.len(), ..PageStats::default() };
     for &n in &all_elements {
         match doc.tag_of(n).unwrap_or_default() {
             "script" => stats.scripts += 1,
@@ -162,11 +156,8 @@ mod tests {
     #[test]
     fn generic_cosmetic_rules_hide_ads() {
         let page = build_page(PAGE, "anything.example", &cosmetics());
-        let hidden_tags: Vec<&str> = page
-            .hidden
-            .iter()
-            .filter_map(|&n| page.doc.tag_of(n))
-            .collect();
+        let hidden_tags: Vec<&str> =
+            page.hidden.iter().filter_map(|&n| page.doc.tag_of(n)).collect();
         // .ad-banner div and the doubleclick iframe are hidden.
         assert!(page.hidden.len() >= 2, "hidden: {:?}", hidden_tags);
     }
@@ -181,11 +172,7 @@ mod tests {
     #[test]
     fn domview_adapter_reads_dom() {
         let doc = bw_render::parse_html("<div id=\"d\" class=\"c\">x</div>");
-        let node = doc
-            .all_elements()
-            .into_iter()
-            .find(|&n| doc.tag_of(n) == Some("div"))
-            .unwrap();
+        let node = doc.all_elements().into_iter().find(|&n| doc.tag_of(n) == Some("div")).unwrap();
         let dom = PageDom(&doc);
         assert_eq!(DomView::attr(&dom, node, "id"), Some("d"));
         assert_eq!(DomView::attr(&dom, node, "ID"), Some("d"));

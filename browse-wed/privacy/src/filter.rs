@@ -236,7 +236,9 @@ impl NetworkFilter {
             // Hostname / HostPath are gated by the bucket lookup in
             // FilterSet::decide; when reached directly we verify the tail.
             Pattern::Hostname(h) => host_matches(ctx.target_host(), h),
-            Pattern::HostPath(h, re) => host_matches(ctx.target_host(), h) && re.is_match(ctx.url.as_str()),
+            Pattern::HostPath(h, re) => {
+                host_matches(ctx.target_host(), h) && re.is_match(ctx.url.as_str())
+            }
         }
     }
 }
@@ -334,13 +336,7 @@ impl FilterSet {
             .build(substring_pats)
             .expect("patterns are plain strings");
 
-        FilterSet {
-            filters,
-            substring_index,
-            substring_map,
-            host_buckets,
-            scan_filters,
-        }
+        FilterSet { filters, substring_index, substring_map, host_buckets, scan_filters }
     }
 
     /// Number of loaded network rules.
@@ -465,11 +461,7 @@ mod tests {
             Decision::Block
         );
         assert_eq!(
-            fs.decide(&make_ctx(
-                "https://doubleclick.net/x",
-                "example.com",
-                ResourceType::SCRIPT
-            )),
+            fs.decide(&make_ctx("https://doubleclick.net/x", "example.com", ResourceType::SCRIPT)),
             Decision::Block
         );
         // not a subdomain boundary
@@ -627,12 +619,7 @@ mod tests {
 
     #[test]
     fn comments_and_cosmetic_lines_skipped() {
-        let fs = rules(&[
-            "! comment",
-            "example.com##.ad-banner",
-            "",
-            "||blockme.io^",
-        ]);
+        let fs = rules(&["! comment", "example.com##.ad-banner", "", "||blockme.io^"]);
         assert_eq!(fs.len(), 1);
     }
 }

@@ -17,7 +17,7 @@ standard `rustup` default install includes everything needed.
 git clone https://github.com/salim77007j/browse-wed
 cd browse-wed
 cargo build --workspace            # debug build of all crates
-cargo test  --workspace            # 187+ tests: unit, integration, fuzz harnesses
+cargo test  --workspace            # 226 tests: unit, integration, fuzz harnesses
 cargo run  -p bw-bench --release --bin engine_perf   # cold-start / RAM numbers
 ```
 

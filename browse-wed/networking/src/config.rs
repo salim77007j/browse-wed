@@ -142,10 +142,8 @@ mod tests {
 
     #[test]
     fn dot_requires_port() {
-        let cfg = NetworkConfig {
-            dns: DnsMode::Dot { addr: "1.1.1.1".into() },
-            ..Default::default()
-        };
+        let cfg =
+            NetworkConfig { dns: DnsMode::Dot { addr: "1.1.1.1".into() }, ..Default::default() };
         assert!(cfg.validate().is_err());
     }
 

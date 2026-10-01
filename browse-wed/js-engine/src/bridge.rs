@@ -168,9 +168,7 @@ fn fill_random<'js>(ta: Value<'js>) -> rquickjs::Result<Value<'js>> {
 /// Render a JS value for console output (JSON-ish, single line).
 fn render_value(v: &Value<'_>) -> String {
     match v.type_of() {
-        rquickjs::Type::String => {
-            String::from_js(v.ctx(), v.clone()).unwrap_or_default()
-        }
+        rquickjs::Type::String => String::from_js(v.ctx(), v.clone()).unwrap_or_default(),
         _ => match crate::value::value_to_js(v) {
             Ok(jv) => serde_json::to_string(&jv_to_display(&jv)).unwrap_or_else(|_| "?".into()),
             Err(_) => String::from("<value>"),
@@ -189,9 +187,7 @@ fn jv_to_display(v: &crate::value::JsValue) -> serde_json::Value {
             serde_json::Value::Array(a.iter().map(jv_to_display).collect())
         }
         crate::value::JsValue::Object(o) => serde_json::Value::Object(
-            o.iter()
-                .map(|(k, v)| (k.clone(), jv_to_display(v)))
-                .collect(),
+            o.iter().map(|(k, v)| (k.clone(), jv_to_display(v))).collect(),
         ),
         crate::value::JsValue::Function => serde_json::Value::String("[Function]".into()),
     }

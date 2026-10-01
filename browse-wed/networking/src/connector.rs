@@ -118,11 +118,7 @@ impl BrowserConnector {
         enable_http2: bool,
         enable_ipv6: bool,
     ) -> BrowserConnector {
-        let alpn = if enable_http2 {
-            vec![tls::ALPN_H2, tls::ALPN_H1]
-        } else {
-            vec![tls::ALPN_H1]
-        };
+        let alpn = if enable_http2 { vec![tls::ALPN_H2, tls::ALPN_H1] } else { vec![tls::ALPN_H1] };
         BrowserConnector {
             dns,
             tls_config: tls::client_config(&alpn),
@@ -133,25 +129,15 @@ impl BrowserConnector {
 
     /// Resolve + connect + TLS for one destination.
     async fn connect_uri(&self, uri: url::Url) -> std::io::Result<MaybeTlsStream> {
-        let host = uri
-            .host_str()
-            .ok_or_else(|| std::io::Error::other("URI has no host"))?
-            .to_string();
-        let port = uri.port_or_known_default().unwrap_or(if uri.scheme() == "https" {
-            443
-        } else {
-            80
-        });
+        let host =
+            uri.host_str().ok_or_else(|| std::io::Error::other("URI has no host"))?.to_string();
+        let port =
+            uri.port_or_known_default().unwrap_or(if uri.scheme() == "https" { 443 } else { 80 });
 
-        let addrs = self
-            .dns
-            .resolve(&host)
-            .await
-            .map_err(|e| std::io::Error::other(e.to_string()))?;
-        let addrs: Vec<IpAddr> = addrs
-            .into_iter()
-            .filter(|a| self.enable_ipv6 || a.is_ipv4())
-            .collect();
+        let addrs =
+            self.dns.resolve(&host).await.map_err(|e| std::io::Error::other(e.to_string()))?;
+        let addrs: Vec<IpAddr> =
+            addrs.into_iter().filter(|a| self.enable_ipv6 || a.is_ipv4()).collect();
         if addrs.is_empty() {
             return Err(std::io::Error::other("no usable addresses after filters"));
         }
@@ -181,8 +167,9 @@ async fn happy_eyeballs_connect(
     timeout: Duration,
 ) -> std::io::Result<TcpStream> {
     let deadline = tokio::time::Instant::now() + timeout;
-    let mut attempt = tokio::time::timeout_at(deadline, TcpStream::connect(SocketAddr::new(addrs[0], port)))
-        .await;
+    let mut attempt =
+        tokio::time::timeout_at(deadline, TcpStream::connect(SocketAddr::new(addrs[0], port)))
+            .await;
     if let Ok(Ok(s)) = attempt {
         return Ok(s);
     }
@@ -197,12 +184,9 @@ async fn happy_eyeballs_connect(
         return Err(std::io::Error::other("connect timeout"));
     }
     if !futures.is_empty() {
-        attempt = tokio::time::timeout(
-            remaining,
-            futures_util::future::select_all(futures),
-        )
-        .await
-        .map(|(res, _idx, _rest)| res);
+        attempt = tokio::time::timeout(remaining, futures_util::future::select_all(futures))
+            .await
+            .map(|(res, _idx, _rest)| res);
         if let Ok(Ok(s)) = attempt {
             return Ok(s);
         }
@@ -272,9 +256,8 @@ mod tests {
 
         // Plain TCP happy-eyeballs path.
         let addrs = vec![IpAddr::from([127, 0, 0, 1])];
-        let mut stream = happy_eyeballs_connect(&addrs, addr.port(), Duration::from_secs(2))
-            .await
-            .unwrap();
+        let mut stream =
+            happy_eyeballs_connect(&addrs, addr.port(), Duration::from_secs(2)).await.unwrap();
         stream.write_all(b"PING!").await.unwrap();
         let mut buf = [0u8; 5];
         stream.read_exact(&mut buf).await.unwrap();

@@ -34,12 +34,8 @@ impl HttpPool {
     pub fn new(connector: BrowserConnector) -> HttpPool {
         let mut builder = Client::builder(TokioExecutor::new());
         // Aggressive pool hygiene: idle sockets die quickly.
-        builder
-            .pool_idle_timeout(Duration::from_secs(30))
-            .pool_max_idle_per_host(4);
-        HttpPool {
-            client: builder.build(connector),
-        }
+        builder.pool_idle_timeout(Duration::from_secs(30)).pool_max_idle_per_host(4);
+        HttpPool { client: builder.build(connector) }
     }
 
     /// Issue a request; response body is streamed (`Incoming`).
@@ -83,23 +79,13 @@ mod tests {
                 }
             }
             assert!(buf.starts_with(b"GET /ping"));
-            sock.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 5\r\n\r\npong!")
-                .await
-                .unwrap();
+            sock.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 5\r\n\r\npong!").await.unwrap();
         });
 
         // Connector talking to the local server through System DNS.
-        let dns = Arc::new(
-            crate::dns::DnsManager::new(crate::config::DnsMode::System)
-                .await
-                .unwrap(),
-        );
-        let connector = BrowserConnector::new(
-            Arc::clone(&dns),
-            Duration::from_secs(3),
-            true,
-            true,
-        );
+        let dns =
+            Arc::new(crate::dns::DnsManager::new(crate::config::DnsMode::System).await.unwrap());
+        let connector = BrowserConnector::new(Arc::clone(&dns), Duration::from_secs(3), true, true);
         let pool = HttpPool::new(connector);
 
         let req = http::Request::builder()
@@ -109,10 +95,7 @@ mod tests {
             .unwrap();
         let res = pool.request(req).await.unwrap();
         assert_eq!(res.status(), 200);
-        let body = http_body_util::BodyExt::collect(res.into_body())
-            .await
-            .unwrap()
-            .to_bytes();
+        let body = http_body_util::BodyExt::collect(res.into_body()).await.unwrap().to_bytes();
         assert_eq!(&body[..], b"pong!");
         server.await.unwrap();
     }

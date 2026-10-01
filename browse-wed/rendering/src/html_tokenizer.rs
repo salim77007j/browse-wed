@@ -314,11 +314,7 @@ fn find_case_insensitive(haystack: &str, needle: &str) -> Option<usize> {
         return None;
     }
     for i in 0..=h.len() - n.len() {
-        if h[i..i + n.len()]
-            .iter()
-            .zip(n.iter())
-            .all(|(a, b)| a.eq_ignore_ascii_case(b))
-        {
+        if h[i..i + n.len()].iter().zip(n.iter()).all(|(a, b)| a.eq_ignore_ascii_case(b)) {
             return Some(i);
         }
     }
@@ -333,10 +329,7 @@ mod tests {
     fn basic_document() {
         let toks = tokenize("<!DOCTYPE html><html><head><title>T</title></head><body><p class=\"x\">Hi</p></body></html>");
         assert!(matches!(toks[0], Token::Doctype(_)));
-        assert_eq!(
-            toks.iter().filter(|t| matches!(t, Token::StartTag { .. })).count(),
-            5
-        );
+        assert_eq!(toks.iter().filter(|t| matches!(t, Token::StartTag { .. })).count(), 5);
         let p = toks.iter().find_map(|t| match t {
             Token::StartTag { name, attrs, .. } if name == "p" => Some(attrs.clone()),
             _ => None,

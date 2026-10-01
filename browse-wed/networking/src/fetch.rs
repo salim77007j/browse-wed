@@ -103,7 +103,11 @@ impl FetchRequest {
     }
 
     /// A subresource request in the context of `top_level_site`.
-    pub fn subresource(url: Url, top_level_site: &str, resource_type: ResourceType) -> FetchRequest {
+    pub fn subresource(
+        url: Url,
+        top_level_site: &str,
+        resource_type: ResourceType,
+    ) -> FetchRequest {
         let source_base = registrable(top_level_site);
         FetchRequest {
             url,
@@ -303,15 +307,7 @@ impl FetchService {
         } else {
             None
         };
-        Ok(Arc::new(FetchService {
-            config,
-            dns,
-            policy,
-            http_pool,
-            h3,
-            cache,
-            cookies,
-        }))
+        Ok(Arc::new(FetchService { config, dns, policy, http_pool, h3, cache, cookies }))
     }
 
     /// The policy engine (for tests / UI diagnostics).
@@ -351,7 +347,9 @@ impl FetchService {
         // ③ Cache lookup.
         if req.method == http::Method::GET && req.cache_mode != CacheMode::NoStore {
             if let Some((meta, body)) = self.cache.get_fresh(req.url.as_str(), None) {
-                if req.cache_mode == CacheMode::OnlyIfCached || meta.is_fresh(std::time::SystemTime::now()) {
+                if req.cache_mode == CacheMode::OnlyIfCached
+                    || meta.is_fresh(std::time::SystemTime::now())
+                {
                     return Ok(FetchResponse {
                         status: http::StatusCode::from_u16(meta.status)
                             .unwrap_or(http::StatusCode::OK),
@@ -468,48 +466,42 @@ impl FetchService {
         let h3_authority = self.policy.alt_svc_h3(&origin);
         if is_https && h3_authority.is_some() && self.config.enable_http3 {
             if let Some(h3) = self.h3.as_ref() {
-            let h3_url = rewrite_port(req.url.clone(), h3_authority.as_deref());
-            match h3
-                .request(&h3_url, &req.method, headers.clone(), req.body.clone())
-                .await
-            {
-                Ok(resp) => {
-                    return Ok(SendOutcome::Complete(Box::new(FetchResponse {
-                        status: resp.status,
-                        headers: resp.headers,
-                        body: resp.body,
-                        final_url: req.url.clone(),
-                        from_cache: false,
-                        protocol: Protocol::Http3,
-                        timing: elapsed_timing(started),
-                        blocked_reason: None,
-                    })));
+                let h3_url = rewrite_port(req.url.clone(), h3_authority.as_deref());
+                match h3.request(&h3_url, &req.method, headers.clone(), req.body.clone()).await {
+                    Ok(resp) => {
+                        return Ok(SendOutcome::Complete(Box::new(FetchResponse {
+                            status: resp.status,
+                            headers: resp.headers,
+                            body: resp.body,
+                            final_url: req.url.clone(),
+                            from_cache: false,
+                            protocol: Protocol::Http3,
+                            timing: elapsed_timing(started),
+                            blocked_reason: None,
+                        })));
+                    }
+                    Err(H3Error::ConnectionClosed | H3Error::ConnectionClosedFrom(_)) => {
+                        h3.close_origin(&origin).await;
+                        // fall through to h1/h2
+                    }
+                    Err(e) => {
+                        // h3 attempted and failed hard: retry once over h1/h2
+                        // (browsers must not fail the load just because QUIC
+                        // is unreachable — RFC 9114 racing fallback).
+                        tracing::debug!(error = %e, "h3 failed; falling back to h1/h2");
+                    }
                 }
-                Err(H3Error::ConnectionClosed | H3Error::ConnectionClosedFrom(_)) => {
-                    h3.close_origin(&origin).await;
-                    // fall through to h1/h2
-                }
-                Err(e) => {
-                    // h3 attempted and failed hard: retry once over h1/h2
-                    // (browsers must not fail the load just because QUIC
-                    // is unreachable — RFC 9114 racing fallback).
-                    tracing::debug!(error = %e, "h3 failed; falling back to h1/h2");
-                }
-            }
             }
         }
 
         // h1/h2 path.
-        let mut builder = http::Request::builder()
-            .method(req.method.clone())
-            .uri(build_uri(&req.url));
+        let mut builder =
+            http::Request::builder().method(req.method.clone()).uri(build_uri(&req.url));
         for (name, value) in &headers {
             builder = builder.header(name, value);
         }
         let body = Full::new(req.body.clone().unwrap_or_default());
-        let http_req = builder
-            .body(body)
-            .map_err(|e| FetchError::Invalid(e.to_string()))?;
+        let http_req = builder.body(body).map_err(|e| FetchError::Invalid(e.to_string()))?;
 
         let send_started = Instant::now();
         let fut = self.http_pool.request(http_req);
@@ -579,9 +571,7 @@ impl FetchService {
         }
         let mut jar = self.cookies.lock().await;
         for v in values {
-            if let Some(stored) =
-                jar.parse_set_cookie(&v, &host, &req.top_level_site, is_secure)
-            {
+            if let Some(stored) = jar.parse_set_cookie(&v, &host, &req.top_level_site, is_secure) {
                 tracing::debug!(name = %stored.name, "cookie stored");
             }
         }
@@ -593,18 +583,12 @@ impl FetchService {
         if url.scheme() != "https" {
             return;
         }
-        if let Some(sts) = resp
-            .headers
-            .get(http::header::STRICT_TRANSPORT_SECURITY)
-            .and_then(|v| v.to_str().ok())
+        if let Some(sts) =
+            resp.headers.get(http::header::STRICT_TRANSPORT_SECURITY).and_then(|v| v.to_str().ok())
         {
             self.policy.observe_hsts(&host, sts);
         }
-        if let Some(alt) = resp
-            .headers
-            .get(http::header::ALT_SVC)
-            .and_then(|v| v.to_str().ok())
-        {
+        if let Some(alt) = resp.headers.get(http::header::ALT_SVC).and_then(|v| v.to_str().ok()) {
             let origin = origin_of(url);
             self.policy.observe_alt_svc(&origin, alt);
         }
@@ -612,10 +596,7 @@ impl FetchService {
 }
 
 enum SendOutcome {
-    Redirect {
-        status: http::StatusCode,
-        location: String,
-    },
+    Redirect { status: http::StatusCode, location: String },
     Complete(Box<FetchResponse>),
 }
 
@@ -631,10 +612,7 @@ pub(crate) fn registrable(host: &str) -> String {
 }
 
 fn is_redirect(status: http::StatusCode) -> bool {
-    matches!(
-        status.as_u16(),
-        301 | 302 | 303 | 307 | 308
-    )
+    matches!(status.as_u16(), 301 | 302 | 303 | 307 | 308)
 }
 
 fn resolve_url(base: &Url, location: &str) -> Option<Url> {
@@ -692,10 +670,7 @@ fn accept_for(ty: ResourceType) -> &'static str {
 }
 
 fn elapsed_timing(started: Instant) -> FetchTiming {
-    FetchTiming {
-        total_ms: started.elapsed().as_secs_f64() * 1000.0,
-        ..FetchTiming::default()
-    }
+    FetchTiming { total_ms: started.elapsed().as_secs_f64() * 1000.0, ..FetchTiming::default() }
 }
 
 fn cache_meta_headers(meta: &CacheMeta) -> http::HeaderMap {
@@ -735,11 +710,8 @@ fn maybe_store_cache(cache: &Arc<HttpCache>, url: &Url, resp: &mut FetchResponse
         .and_then(|v| v.to_str().ok())
         .unwrap_or("application/octet-stream")
         .to_string();
-    let etag = resp
-        .headers
-        .get(http::header::ETAG)
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+    let etag =
+        resp.headers.get(http::header::ETAG).and_then(|v| v.to_str().ok()).map(|s| s.to_string());
     let last_modified = resp
         .headers
         .get(http::header::LAST_MODIFIED)

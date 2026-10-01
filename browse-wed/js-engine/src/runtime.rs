@@ -118,13 +118,7 @@ impl SiteRuntime {
         ctx.with(|ctx| bridge::install_basics(&ctx, site))
             .map_err(|e| JsError::Init(e.to_string()))?;
 
-        Ok(SiteRuntime {
-            site: site.to_string(),
-            runtime: rt,
-            context: ctx,
-            limits,
-            deadline_us,
-        })
+        Ok(SiteRuntime { site: site.to_string(), runtime: rt, context: ctx, limits, deadline_us })
     }
 
     /// The site this runtime belongs to.
@@ -191,9 +185,7 @@ impl SiteRuntime {
         // 2. Did we hit the heap cap?
         let used = self.runtime.memory_usage();
         if used.malloc_size as usize >= self.limits.memory_limit {
-            return JsError::MemoryLimit {
-                bytes: used.malloc_size,
-            };
+            return JsError::MemoryLimit { bytes: used.malloc_size };
         }
         // 3. Ordinary script exception.
         JsError::Exception(msg)
@@ -241,9 +233,7 @@ fn engine_now_us() -> i64 {
 fn render_caught(caught: &rquickjs::CaughtError<'_>) -> String {
     match caught {
         rquickjs::CaughtError::Error(e) => format!("internal error: {e}"),
-        rquickjs::CaughtError::Exception(ex) => {
-            ex.message().unwrap_or_else(|| ex.to_string())
-        }
+        rquickjs::CaughtError::Exception(ex) => ex.message().unwrap_or_else(|| ex.to_string()),
         rquickjs::CaughtError::Value(v) => format!("{v:?}"),
     }
 }
@@ -314,18 +304,13 @@ mod tests {
     #[test]
     fn infinite_loop_times_out() {
         let rt = rt();
-        let err = rt
-            .exec_with_timeout("while(true) {}", Duration::from_millis(100))
-            .unwrap_err();
+        let err = rt.exec_with_timeout("while(true) {}", Duration::from_millis(100)).unwrap_err();
         assert!(matches!(err, JsError::Timeout(_)));
     }
 
     #[test]
     fn deep_recursion_hits_stack_cap() {
-        let limits = RuntimeLimits {
-            stack_size: 128 * 1024,
-            ..RuntimeLimits::default()
-        };
+        let limits = RuntimeLimits { stack_size: 128 * 1024, ..RuntimeLimits::default() };
         let rt = SiteRuntime::new("https://test.example", limits).unwrap();
         // Should terminate (stack overflow exception), never crash.
         let res = rt.exec("function f(){ return f(); } f()");
@@ -334,10 +319,7 @@ mod tests {
 
     #[test]
     fn memory_limit_enforced() {
-        let limits = RuntimeLimits {
-            memory_limit: 4 * 1024 * 1024,
-            ..RuntimeLimits::default()
-        };
+        let limits = RuntimeLimits { memory_limit: 4 * 1024 * 1024, ..RuntimeLimits::default() };
         let rt = SiteRuntime::new("https://test.example", limits).unwrap();
         let res = rt.exec("let a = []; for(;;) { a.push(new Array(10000).fill(0x41)); }");
         assert!(res.is_err());
@@ -393,10 +375,7 @@ mod tests {
         let held = rt.stats().objects;
         rt.exec("globalThis.keep = null;").unwrap();
         let freed = rt.gc().objects;
-        assert!(
-            freed < held,
-            "gc did not reclaim objects: {held} -> {freed}"
-        );
+        assert!(freed < held, "gc did not reclaim objects: {held} -> {freed}");
     }
 
     #[test]
@@ -404,10 +383,7 @@ mod tests {
         let a = SiteRuntime::new("https://a.example", RuntimeLimits::default()).unwrap();
         let b = SiteRuntime::new("https://b.example", RuntimeLimits::default()).unwrap();
         a.exec("globalThis.leak = new Array(50000).fill(0);").unwrap();
-        assert_eq!(
-            b.exec("typeof globalThis.leak").unwrap(),
-            JsValue::String("undefined".into())
-        );
+        assert_eq!(b.exec("typeof globalThis.leak").unwrap(), JsValue::String("undefined".into()));
         // b's heap must not carry a's objects.
         assert!(b.stats().memory_used < a.stats().memory_used);
     }

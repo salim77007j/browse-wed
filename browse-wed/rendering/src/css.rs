@@ -265,10 +265,7 @@ impl Default for ComputedStyle {
 impl ComputedStyle {
     /// Style for `<body>`-ish defaults used at the root of layout.
     pub fn root() -> ComputedStyle {
-        ComputedStyle {
-            display: Display::Block,
-            ..Default::default()
-        }
+        ComputedStyle { display: Display::Block, ..Default::default() }
     }
 
     /// Inheritable properties from parent.
@@ -323,12 +320,7 @@ pub fn parse_stylesheet(css: &str) -> Stylesheet {
             specificity.classes += s.classes;
             specificity.types += s.types;
         }
-        sheet.rules.push(Rule {
-            selectors: parsed_sels,
-            decls,
-            specificity,
-            order,
-        });
+        sheet.rules.push(Rule { selectors: parsed_sels, decls, specificity, order });
         order += 1;
     }
     sheet
@@ -554,7 +546,11 @@ fn parse_values(input: &str) -> Vec<Value> {
         if let Some(c) = parse_color(tok) {
             out.push(Value::Color(c));
         } else if let Ok(px) = tok.trim_end_matches("px").trim().parse::<f32>() {
-            if tok.ends_with("px") || (px != 0.0 && !tok.contains('%') && !tok.chars().all(|c| c.is_ascii_digit() || c == '.' || c == '-')) {
+            if tok.ends_with("px")
+                || (px != 0.0
+                    && !tok.contains('%')
+                    && !tok.chars().all(|c| c.is_ascii_digit() || c == '.' || c == '-'))
+            {
                 out.push(Value::Px(px));
             } else if tok.chars().all(|c| c.is_ascii_digit() || c == '.' || c == '-') {
                 out.push(Value::Px(px)); // unitless = px
@@ -589,18 +585,8 @@ pub fn parse_color(tok: &str) -> Option<Color> {
                 scale_hex(nibble(h[2])),
                 scale_hex(nibble(h[3])),
             ]),
-            6 => Some([
-                byte(&hex[0..2])?,
-                byte(&hex[2..4])?,
-                byte(&hex[4..6])?,
-                255,
-            ]),
-            8 => Some([
-                byte(&hex[0..2])?,
-                byte(&hex[2..4])?,
-                byte(&hex[4..6])?,
-                byte(&hex[6..8])?,
-            ]),
+            6 => Some([byte(&hex[0..2])?, byte(&hex[2..4])?, byte(&hex[4..6])?, 255]),
+            8 => Some([byte(&hex[0..2])?, byte(&hex[2..4])?, byte(&hex[4..6])?, byte(&hex[6..8])?]),
             _ => None,
         };
     }
@@ -666,7 +652,11 @@ fn byte(hex: &str) -> Option<u8> {
 // ---------------------------------------------------------------------------
 
 /// Compute styles for every element in the document.
-pub fn cascade(doc: &Document, sheets: &[Stylesheet], author_style: &str) -> HashMap<NodeId, ComputedStyle> {
+pub fn cascade(
+    doc: &Document,
+    sheets: &[Stylesheet],
+    author_style: &str,
+) -> HashMap<NodeId, ComputedStyle> {
     let mut author = parse_stylesheet(author_style);
     for s in sheets {
         author.rules.extend(s.rules.clone());
@@ -735,32 +725,17 @@ fn apply_tag_defaults(style: &mut ComputedStyle, el: &ElementData) {
         "h1" => {
             style.font_size = 32.0;
             style.font_weight = 700;
-            style.margin = [
-                Value::Px(21.44),
-                Value::Px(0.0),
-                Value::Px(21.44),
-                Value::Px(0.0),
-            ];
+            style.margin = [Value::Px(21.44), Value::Px(0.0), Value::Px(21.44), Value::Px(0.0)];
         }
         "h2" => {
             style.font_size = 24.0;
             style.font_weight = 700;
-            style.margin = [
-                Value::Px(19.92),
-                Value::Px(0.0),
-                Value::Px(19.92),
-                Value::Px(0.0),
-            ];
+            style.margin = [Value::Px(19.92), Value::Px(0.0), Value::Px(19.92), Value::Px(0.0)];
         }
         "h3" => {
             style.font_size = 18.72;
             style.font_weight = 700;
-            style.margin = [
-                Value::Px(18.72),
-                Value::Px(0.0),
-                Value::Px(18.72),
-                Value::Px(0.0),
-            ];
+            style.margin = [Value::Px(18.72), Value::Px(0.0), Value::Px(18.72), Value::Px(0.0)];
         }
         "h4" => {
             style.font_size = 16.0;
@@ -779,55 +754,25 @@ fn apply_tag_defaults(style: &mut ComputedStyle, el: &ElementData) {
             style.color = [0, 102, 204, 255];
         }
         "ul" | "ol" => {
-            style.margin = [
-                Value::Px(16.0),
-                Value::Px(0.0),
-                Value::Px(16.0),
-                Value::Px(0.0),
-            ];
-            style.padding = [
-                Value::Px(0.0),
-                Value::Px(0.0),
-                Value::Px(0.0),
-                Value::Px(40.0),
-            ];
+            style.margin = [Value::Px(16.0), Value::Px(0.0), Value::Px(16.0), Value::Px(0.0)];
+            style.padding = [Value::Px(0.0), Value::Px(0.0), Value::Px(0.0), Value::Px(40.0)];
         }
         "p" => {
-            style.margin = [
-                Value::Px(16.0),
-                Value::Px(0.0),
-                Value::Px(16.0),
-                Value::Px(0.0),
-            ];
+            style.margin = [Value::Px(16.0), Value::Px(0.0), Value::Px(16.0), Value::Px(0.0)];
         }
         "blockquote" => {
-            style.margin = [
-                Value::Px(16.0),
-                Value::Px(0.0),
-                Value::Px(16.0),
-                Value::Px(40.0),
-            ];
+            style.margin = [Value::Px(16.0), Value::Px(0.0), Value::Px(16.0), Value::Px(40.0)];
         }
         "button" | "input" | "select" | "textarea" => {
             style.display = Display::Inline;
             style.border = [1.0; 4];
             style.border_color = [118, 118, 118, 255];
-            style.padding = [
-                Value::Px(2.0),
-                Value::Px(6.0),
-                Value::Px(2.0),
-                Value::Px(6.0),
-            ];
+            style.padding = [Value::Px(2.0), Value::Px(6.0), Value::Px(2.0), Value::Px(6.0)];
         }
         "hr" => {
             style.border = [1.0, 0.0, 0.0, 0.0];
             style.border_color = [0, 0, 0, 255];
-            style.margin = [
-                Value::Px(8.0),
-                Value::Px(0.0),
-                Value::Px(8.0),
-                Value::Px(0.0),
-            ];
+            style.margin = [Value::Px(8.0), Value::Px(0.0), Value::Px(8.0), Value::Px(0.0)];
         }
         "img" | "video" | "canvas" | "svg" | "iframe" | "embed" | "object" => {
             style.display = Display::Inline;
@@ -891,7 +836,11 @@ fn is_block_tag(tag: &str) -> bool {
     )
 }
 
-fn apply_declarations(style: &mut ComputedStyle, decls: &[(String, Vec<Value>)], parent: &ComputedStyle) {
+fn apply_declarations(
+    style: &mut ComputedStyle,
+    decls: &[(String, Vec<Value>)],
+    parent: &ComputedStyle,
+) {
     for (name, values) in decls {
         let first = values.first().cloned();
         match name.as_str() {
@@ -983,7 +932,9 @@ fn apply_declarations(style: &mut ComputedStyle, decls: &[(String, Vec<Value>)],
             }
             "font-size" => match first {
                 Some(Value::Px(p)) => style.font_size = p.max(1.0),
-                Some(Value::Percent(p)) => style.font_size = (parent.font_size * p / 100.0).max(1.0),
+                Some(Value::Percent(p)) => {
+                    style.font_size = (parent.font_size * p / 100.0).max(1.0)
+                }
                 Some(Value::Keyword(k)) => {
                     style.font_size = match k.as_str() {
                         "xx-small" => 9.0,
@@ -1108,12 +1059,7 @@ fn apply_box_shorthand(box4: &mut [Value; 4], values: &[Value], parent: &Compute
             *box4 = [a, b.clone(), c, b];
         }
         n if n >= 4 => {
-            *box4 = [
-                values[0].clone(),
-                values[1].clone(),
-                values[2].clone(),
-                values[3].clone(),
-            ];
+            *box4 = [values[0].clone(), values[1].clone(), values[2].clone(), values[3].clone()];
         }
         _ => {}
     }
@@ -1160,12 +1106,10 @@ mod tests {
     fn cascade_specificity() {
         let html = "<html><body><p id=\"main\" class=\"note\">x</p></body></html>";
         let doc = parse_html(html);
-        let sheet = parse_stylesheet("p { color: red; } .note { color: blue; } #main { color: #0f0; }");
+        let sheet =
+            parse_stylesheet("p { color: red; } .note { color: blue; } #main { color: #0f0; }");
         let styles = cascade(&doc, &[sheet], "");
-        let p = doc
-            .traverse()
-            .find(|&n| doc.tag_of(n) == Some("p"))
-            .unwrap();
+        let p = doc.traverse().find(|&n| doc.tag_of(n) == Some("p")).unwrap();
         let s = &styles[&p];
         assert_eq!(s.color, [0, 255, 0, 255]);
     }

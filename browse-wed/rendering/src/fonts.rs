@@ -85,11 +85,7 @@ impl FontSystem {
         if db.is_empty() {
             tracing::warn!("no system fonts found; text rendering will be degraded");
         }
-        FontSystem {
-            db,
-            cx: ScaleContext::new(),
-            metrics_cache: HashMap::new(),
-        }
+        FontSystem { db, cx: ScaleContext::new(), metrics_cache: HashMap::new() }
     }
 
     /// Number of loaded font faces.
@@ -121,11 +117,7 @@ impl FontSystem {
         let query = fontdb::Query {
             families: &query_families,
             weight: fontdb::Weight(weight.clamp(100, 900) as u16),
-            style: if italic {
-                fontdb::Style::Italic
-            } else {
-                fontdb::Style::Normal
-            },
+            style: if italic { fontdb::Style::Italic } else { fontdb::Style::Normal },
             ..Default::default()
         };
         self.db.query(&query)
@@ -239,20 +231,35 @@ impl FontSystem {
 /// fontconfig does for native Linux browsers.
 fn map_generic_families(db: &mut fontdb::Database) {
     let has = |name: &str| {
-        db.faces()
-            .any(|f| f.families.iter().any(|(n, _)| n.eq_ignore_ascii_case(name)))
+        db.faces().any(|f| f.families.iter().any(|(n, _)| n.eq_ignore_ascii_case(name)))
     };
     const SANS: &[&str] = &[
-        "Arial", "DejaVu Sans", "Liberation Sans", "Noto Sans", "Segoe UI", "Helvetica",
-        "Ubuntu", "Cantarell", "Roboto",
+        "Arial",
+        "DejaVu Sans",
+        "Liberation Sans",
+        "Noto Sans",
+        "Segoe UI",
+        "Helvetica",
+        "Ubuntu",
+        "Cantarell",
+        "Roboto",
     ];
     const SERIF: &[&str] = &[
-        "Times New Roman", "DejaVu Serif", "Liberation Serif", "Noto Serif", "Georgia",
+        "Times New Roman",
+        "DejaVu Serif",
+        "Liberation Serif",
+        "Noto Serif",
+        "Georgia",
         "FreeSerif",
     ];
     const MONO: &[&str] = &[
-        "Courier New", "DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono", "Consolas",
-        "Menlo", "FreeMono",
+        "Courier New",
+        "DejaVu Sans Mono",
+        "Liberation Mono",
+        "Noto Sans Mono",
+        "Consolas",
+        "Menlo",
+        "FreeMono",
     ];
     // Resolve while `db` is immutably borrowed, then mutate.
     let sans = SANS.iter().find(|n| has(n)).copied();

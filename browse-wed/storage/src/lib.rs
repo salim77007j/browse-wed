@@ -100,7 +100,8 @@ impl StorageConfig {
     /// Ephemeral in-memory-ish config under the system temp dir.
     #[cfg(test)]
     pub fn ephemeral(tag: &str) -> StorageConfig {
-        let dir = std::env::temp_dir().join(format!("bw-storage-test-{tag}-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("bw-storage-test-{tag}-{}", std::process::id()));
         StorageConfig::new(dir)
     }
 }
@@ -138,12 +139,7 @@ impl Storage {
             config.disk_cache_budget,
         ));
 
-        Ok(Storage {
-            config,
-            db,
-            cookies,
-            cache,
-        })
+        Ok(Storage { config, db, cookies, cache })
     }
 
     /// The cookie jar.
@@ -174,11 +170,7 @@ impl Storage {
     }
 
     /// LocalStorage view for a (partition, origin) pair.
-    pub fn local_storage(
-        &self,
-        partition: &str,
-        origin: &str,
-    ) -> localstorage::LocalStorage {
+    pub fn local_storage(&self, partition: &str, origin: &str) -> localstorage::LocalStorage {
         localstorage::LocalStorage::new(
             std::sync::Arc::clone(&self.db),
             partition.to_string(),
@@ -188,11 +180,7 @@ impl Storage {
 
     /// IndexedDB view for a (partition, origin) pair.
     pub fn indexed_db(&self, partition: &str, origin: &str) -> idb::Idb {
-        idb::Idb::new(
-            std::sync::Arc::clone(&self.db),
-            partition.to_string(),
-            origin.to_string(),
-        )
+        idb::Idb::new(std::sync::Arc::clone(&self.db), partition.to_string(), origin.to_string())
     }
 
     /// Effective profile directory.
@@ -298,13 +286,16 @@ mod tests {
             .unwrap()
             .is_none());
         let jar = storage.cookies();
-        assert!(jar
-            .get_for("https://app.example/x", "app.example", true)
-            .is_empty());
+        assert!(jar.get_for("https://app.example/x", "app.example", true).is_empty());
     }
 
     /// Build a simple first-party cookie for tests.
-    fn bw_test_cookie(name: &str, value: &str, domain: &str, partition: Option<&str>) -> cookies::Cookie {
+    fn bw_test_cookie(
+        name: &str,
+        value: &str,
+        domain: &str,
+        partition: Option<&str>,
+    ) -> cookies::Cookie {
         cookies::Cookie {
             name: name.to_string(),
             value: value.to_string(),

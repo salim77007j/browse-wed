@@ -147,13 +147,7 @@ impl BloomFilter {
             let s = off + i * 8;
             bits.push(u64::from_le_bytes(bytes[s..s + 8].try_into().ok()?));
         }
-        Some(BloomFilter {
-            bits,
-            num_bits,
-            num_hashes,
-            key0: keys[0],
-            key1: keys[1],
-        })
+        Some(BloomFilter { bits, num_bits, num_hashes, key0: keys[0], key1: keys[1] })
     }
 }
 
@@ -372,9 +366,7 @@ mod tests {
         for i in 0..10_000u64 {
             bf.insert(&i.to_le_bytes());
         }
-        let fp = (0..10_000u64)
-            .filter(|i| bf.contains(&(i + 1_000_000).to_le_bytes()))
-            .count();
+        let fp = (0..10_000u64).filter(|i| bf.contains(&(i + 1_000_000).to_le_bytes())).count();
         assert!(fp < 300, "false positives too high: {fp}/10000");
     }
 
@@ -414,18 +406,9 @@ mod tests {
 
     #[test]
     fn canonicalization_rules() {
-        assert_eq!(
-            canonicalize("HTTPS://Example.COM./a/./b/../c"),
-            "https://example.com/a/c"
-        );
-        assert_eq!(
-            canonicalize("http://example.com:80/x#frag"),
-            "http://example.com/x"
-        );
-        assert_eq!(
-            canonicalize("https://example.com:8443/x"),
-            "https://example.com:8443/x"
-        );
+        assert_eq!(canonicalize("HTTPS://Example.COM./a/./b/../c"), "https://example.com/a/c");
+        assert_eq!(canonicalize("http://example.com:80/x#frag"), "http://example.com/x");
+        assert_eq!(canonicalize("https://example.com:8443/x"), "https://example.com:8443/x");
         assert_eq!(canonicalize("example.com"), "http://example.com/");
     }
 }
