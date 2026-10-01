@@ -489,7 +489,7 @@ impl BrowserEngine {
             governor.refresh();
             self.cache.set_memory_budget(governor.http_cache_memory_budget());
             let pressure = governor.pressure();
-            let mut tabs = self.tabs.lock().await;
+            let tabs = self.tabs.lock().await;
             let due: Vec<TabId> = tabs
                 .all()
                 .iter()
