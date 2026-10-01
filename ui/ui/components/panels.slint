@@ -1,0 +1,685 @@
+// Management panels: bookmarks, history, downloads, privacy dashboard,
+// filter lists ("extensions"), devtools drawer.
+
+import { Theme } from "../theme.slint";
+import { Icon } from "icons.slint";
+import { IconButton, FlatButton, Toggle, SettingRow, Divider } from "shared.slint";
+import { BookmarkItem, HistoryItem, DownloadItem, FilterRow, DevtoolsLog } from "../theme.slint";
+import { PanelShell } from "settings.slint";
+
+export component BookmarksView inherits Rectangle {
+    in property <[BookmarkItem]> bookmarks;
+    in property <int> section-index;
+
+    callback close();
+    callback open(string);
+    callback delete-bookmark(int);
+    callback edit-bookmark(int);
+    callback import-bookmarks();
+    callback export-bookmarks();
+    callback new-folder();
+    callback search-edited(string);
+    callback section-picked(int);
+
+    PanelShell {
+        title: "Bookmarks";
+        sections: [
+            { section: "All bookmarks", icon: "star" },
+            { section: "Bookmarks bar", icon: "bookmarks" },
+            { section: "Other", icon: "folder" },
+        ];
+        section-index: root.section-index;
+        close => { root.close(); }
+        search-edited(t) => { root.search-edited(t); }
+        section-picked(i) => { root.section-picked(i); }
+
+        VerticalLayout {
+            spacing: 4px;
+
+            HorizontalLayout {
+                spacing: 8px;
+                padding-bottom: 12px;
+
+                FlatButton { text: "Add current page"; clicked => { root.edit-bookmark(-1); } }
+                FlatButton { text: "Import HTML…"; clicked => { root.import-bookmarks(); } }
+                FlatButton { text: "Export HTML…"; clicked => { root.export-bookmarks(); } }
+                FlatButton { text: "New folder"; clicked => { root.new-folder(); } }
+            }
+
+            if root.bookmarks.length == 0: Text {
+                text: "No bookmarks yet — press Ctrl+D on any page.";
+                color: Theme.text-secondary;
+                font-size: Theme.font-size-m;
+            }
+
+            for bm in root.bookmarks: Rectangle {
+                height: 52px;
+                background: ta.has-hover ? Theme.panel-item-hover : transparent;
+                border-radius: 8px;
+
+                ta := TouchArea {
+                    mouse-cursor: MouseCursor.pointer;
+                    clicked => { root.open(bm.url); }
+                }
+
+                HorizontalLayout {
+                    padding-left: 14px;
+                    padding-right: 8px;
+                    spacing: 12px;
+
+                    if bm.favicon.width > 0: Image {
+                        source: bm.favicon;
+                        width: 18px; height: 18px;
+                        image-fit: contain;
+                        y: (parent.height - self.height) / 2;
+                    }
+                    if bm.favicon.width <= 0: Icon {
+                        icon: "globe";
+                        icon-color: Theme.text-secondary;
+                        icon-size: 17px;
+                        y: (parent.height - self.height) / 2;
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 2px;
+
+                        Text {
+                            text: bm.title == "" ? bm.url : bm.title;
+                            font-size: Theme.font-size-m;
+                            color: Theme.text-primary;
+                            overflow: elide;
+                        }
+                        Text {
+                            text: bm.url;
+                            font-size: Theme.font-size-s;
+                            color: Theme.text-secondary;
+                            overflow: elide;
+                        }
+                    }
+
+                    IconButton {
+                        icon: "edit";
+                        tooltip: "Edit";
+                        clicked => { root.edit-bookmark(bm.id); }
+                    }
+                    IconButton {
+                        icon: "delete";
+                        tooltip: "Delete";
+                        clicked => { root.delete-bookmark(bm.id); }
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component HistoryView inherits Rectangle {
+    in property <[HistoryItem]> entries;
+    in property <int> section-index;
+
+    callback close();
+    callback open(string);
+    callback delete-entry(int);
+    callback clear-all();
+    callback search-edited(string);
+    callback section-picked(int);
+
+    PanelShell {
+        title: "History";
+        sections: [
+            { section: "All history", icon: "history" },
+            { section: "Last 24 hours", icon: "performance" },
+            { section: "Last 7 days", icon: "performance" },
+        ];
+        section-index: root.section-index;
+        close => { root.close(); }
+        search-edited(t) => { root.search-edited(t); }
+        section-picked(i) => { root.section-picked(i); }
+
+        VerticalLayout {
+            spacing: 4px;
+
+            HorizontalLayout {
+                spacing: 8px;
+                padding-bottom: 12px;
+                FlatButton { text: "Clear browsing data…"; danger: true; clicked => { root.clear-all(); } }
+            }
+
+            if root.entries.length == 0: Text {
+                text: "No history entries.";
+                color: Theme.text-secondary;
+                font-size: Theme.font-size-m;
+            }
+
+            for entry in root.entries: Rectangle {
+                height: 48px;
+                background: ta.has-hover ? Theme.panel-item-hover : transparent;
+                border-radius: 8px;
+
+                ta := TouchArea {
+                    mouse-cursor: MouseCursor.pointer;
+                    clicked => { root.open(entry.url); }
+                }
+
+                HorizontalLayout {
+                    padding-left: 14px;
+                    padding-right: 8px;
+                    spacing: 12px;
+
+                    Text {
+                        text: entry.visited;
+                        font-size: Theme.font-size-s;
+                        color: Theme.text-secondary;
+                        vertical-alignment: center;
+                        width: 120px;
+                    }
+
+                    if entry.favicon.width > 0: Image {
+                        source: entry.favicon;
+                        width: 17px; height: 17px;
+                        image-fit: contain;
+                        y: (parent.height - self.height) / 2;
+                    }
+                    if entry.favicon.width <= 0: Icon {
+                        icon: "globe";
+                        icon-color: Theme.text-secondary;
+                        icon-size: 16px;
+                        y: (parent.height - self.height) / 2;
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 2px;
+                        Text {
+                            text: entry.title == "" ? entry.url : entry.title;
+                            font-size: Theme.font-size-m;
+                            color: Theme.text-primary;
+                            overflow: elide;
+                        }
+                        Text {
+                            text: entry.url;
+                            font-size: Theme.font-size-s;
+                            color: Theme.text-secondary;
+                            overflow: elide;
+                        }
+                    }
+
+                    IconButton {
+                        icon: "delete";
+                        tooltip: "Remove";
+                        clicked => { root.delete-entry(entry.id); }
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component DownloadsView inherits Rectangle {
+    in property <[DownloadItem]> downloads;
+
+    callback close();
+    callback pause-resume(int);
+    callback cancel(int);
+    callback retry(int);
+    callback open-file(int);
+    callback show-in-folder(int);
+    callback clear-finished();
+
+    PanelShell {
+        title: "Downloads";
+        sections: [ { section: "All downloads", icon: "download" } ];
+        close => { root.close(); }
+        search-edited(t) => { }
+
+        VerticalLayout {
+            spacing: 4px;
+
+            HorizontalLayout {
+                spacing: 8px;
+                padding-bottom: 12px;
+                FlatButton { text: "Clear finished"; clicked => { root.clear-finished(); } }
+            }
+
+            if root.downloads.length == 0: Text {
+                text: "No downloads yet.";
+                color: Theme.text-secondary;
+                font-size: Theme.font-size-m;
+            }
+
+            for dl in root.downloads: Rectangle {
+                height: 72px;
+                background: Theme.dark ? #ffffff08 : #00000004;
+                border-radius: Theme.radius-chip;
+
+                HorizontalLayout {
+                    padding-left: 14px;
+                    padding-right: 8px;
+                    padding-top: 8px;
+                    padding-bottom: 8px;
+                    spacing: 14px;
+
+                    Icon {
+                        icon: dl.icon == "" ? "file" : dl.icon;
+                        icon-color: Theme.text-secondary;
+                        icon-size: 26px;
+                        y: (parent.height - self.height) / 2;
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 4px;
+
+                        Text {
+                            text: dl.filename;
+                            font-size: Theme.font-size-m;
+                            color: Theme.text-primary;
+                            overflow: elide;
+                        }
+
+                        if dl.progress >= 0 && dl.progress < 1: Rectangle {
+                            height: 6px;
+                            border-radius: 3px;
+                            background: Theme.pill-bg;
+
+                            Rectangle {
+                                y: 0;
+                                height: 6px;
+                                border-radius: 3px;
+                                width: Math.min(parent.width * dl.progress, parent.width);
+                                background: Theme.accent;
+                            }
+                        }
+
+                        Text {
+                            text: dl.progress >= 3 ? "Done — " + Theme.format-bytes(dl.total-bytes)
+                                : dl.progress >= 4 ? "Failed — " + Theme.format-bytes(dl.received-bytes) + " of " + Theme.format-bytes(dl.total-bytes)
+                                : dl.paused ? "Paused — " + Theme.format-bytes(dl.received-bytes) + " of " + Theme.format-bytes(dl.total-bytes)
+                                : Theme.format-bytes(dl.received-bytes) + " of " + Theme.format-bytes(dl.total-bytes)
+                                    + (dl.speed != "" ? " — " + dl.speed : "");
+                            font-size: Theme.font-size-s;
+                            color: dl.progress >= 4 ? Theme.danger : Theme.text-secondary;
+                        }
+                    }
+
+                    if dl.progress >= 0 && dl.progress < 1: IconButton {
+                        icon: dl.paused ? "restart" : "menu";
+                        tooltip: dl.paused ? "Resume" : "Pause";
+                        clicked => { root.pause-resume(dl.id); }
+                    }
+                    if dl.progress >= 0 && dl.progress < 4: IconButton {
+                        icon: "close";
+                        tooltip: "Cancel";
+                        clicked => { root.cancel(dl.id); }
+                    }
+                    if dl.progress >= 4: IconButton {
+                        icon: "reload";
+                        tooltip: "Retry";
+                        clicked => { root.retry(dl.id); }
+                    }
+                    if dl.progress >= 3: IconButton {
+                        icon: "external";
+                        tooltip: "Open file";
+                        clicked => { root.open-file(dl.id); }
+                    }
+                    if dl.progress >= 3: IconButton {
+                        icon: "folder";
+                        tooltip: "Show in folder";
+                        clicked => { root.show-in-folder(dl.id); }
+                    }
+                }
+            }
+        }
+    }
+}
+
+component StatBig inherits Rectangle {
+    in property <string> label;
+    in property <int> value;
+
+    height: 92px;
+    border-radius: Theme.radius-card;
+    background: Theme.dark ? #ffffff08 : #00000005;
+    horizontal-stretch: 1;
+
+    VerticalLayout {
+        alignment: center;
+        spacing: 6px;
+
+        Text {
+            text: root.value;
+            font-size: 28px;
+            font-weight: 600;
+            color: Theme.text-primary;
+            horizontal-alignment: center;
+        }
+        Text {
+            text: root.label;
+            font-size: Theme.font-size-s;
+            color: Theme.text-secondary;
+            horizontal-alignment: center;
+        }
+    }
+}
+
+export component PrivacyView inherits Rectangle {
+    in property <int> trackers-blocked;
+    in property <int> ads-blocked;
+    in property <int> https-upgrades;
+    in property <int> dns-queries;
+    in property <int> fingerprints-defeated;
+    in property <bool> adblock-on;
+    in property <bool> trackerlist-on;
+    in property <bool> cosmetic-on;
+    in property <bool> fingerprint-on;
+    in property <bool> doh-on;
+    in property <bool> safebrowsing-on;
+    in property <string> pressure: "none";
+    in property <int> live-pages;
+    in property <int> suspended-tabs;
+    in property <int> cache-mb;
+    in property <int> js-heap-mb;
+
+    callback close();
+    callback adblock-changed(bool);
+    callback trackerlist-changed(bool);
+    callback cosmetic-changed(bool);
+    callback fingerprint-changed(bool);
+    callback doh-changed(bool);
+    callback safebrowsing-changed(bool);
+
+    PanelShell {
+        title: "Privacy dashboard";
+        sections: [ { section: "This session", icon: "shield" }, { section: "Protections", icon: "privacy" }, { section: "Engine state", icon: "performance" } ];
+        close => { root.close(); }
+        search-edited(t) => { }
+        section-picked(i) => { }
+
+        VerticalLayout {
+            spacing: 8px;
+
+            Text { text: "This session"; font-size: Theme.font-size-xxl; font-weight: 500; color: Theme.text-primary; }
+            Divider { }
+
+            HorizontalLayout {
+                spacing: 12px;
+
+                StatBig { label: "Trackers blocked"; value: root.trackers-blocked; }
+                StatBig { label: "Ads blocked"; value: root.ads-blocked; }
+                StatBig { label: "HTTPS upgrades"; value: root.https-upgrades; }
+            }
+            HorizontalLayout {
+                spacing: 12px;
+
+                StatBig { label: "DNS queries"; value: root.dns-queries; }
+                StatBig { label: "Fingerprint probes farbled"; value: root.fingerprints-defeated; }
+                StatBig { label: "Live pages in RAM"; value: root.live-pages; }
+            }
+
+            Divider { }
+            Text { text: "Protections"; font-size: Theme.font-size-xxl; font-weight: 500; color: Theme.text-primary; }
+            Divider { }
+
+            SettingRow { icon: "shield"; title: "Ad blocking"; subtitle: "Network filter list"; has-toggle: true; checked: root.adblock-on; toggled(v) => { root.adblock-changed(v); } }
+            SettingRow { icon: "privacy"; title: "Tracker blocking"; subtitle: "Before DNS, sockets, and TLS"; has-toggle: true; checked: root.trackerlist-on; toggled(v) => { root.trackerlist-changed(v); } }
+            SettingRow { icon: "eye"; title: "Cosmetic filtering"; subtitle: "Ad slots never painted"; has-toggle: true; checked: root.cosmetic-on; toggled(v) => { root.cosmetic-changed(v); } }
+            SettingRow { icon: "fingerprint"; title: "Anti-fingerprinting"; subtitle: "Per-site farbling of probe surfaces"; has-toggle: true; checked: root.fingerprint-on; toggled(v) => { root.fingerprint-changed(v); } }
+            SettingRow { icon: "globe"; title: "Encrypted DNS (DoH)"; has-toggle: true; checked: root.doh-on; toggled(v) => { root.doh-changed(v); } }
+            SettingRow { icon: "warning"; title: "Safe browsing"; has-toggle: true; checked: root.safebrowsing-on; toggled(v) => { root.safebrowsing-changed(v); } }
+
+            Divider { }
+            Text { text: "Engine state"; font-size: Theme.font-size-xxl; font-weight: 500; color: Theme.text-primary; }
+            Divider { }
+
+            SettingRow { icon: "performance"; title: "Memory pressure"; value-text: root.pressure; }
+            SettingRow { icon: "moon"; title: "Suspended tabs"; subtitle: "~100 bytes each"; value-text: root.suspended-tabs; }
+            SettingRow { icon: "download"; title: "HTTP cache budget"; value-text: root.cache-mb + " MB"; }
+            SettingRow { icon: "devtools"; title: "JS heap in use"; value-text: root.js-heap-mb + " MB"; }
+        }
+    }
+}
+
+export component ExtensionsView inherits Rectangle {
+    in property <[FilterRow]> filters;
+
+    callback close();
+    callback filter-toggled(int, bool);
+    callback filter-delete(int);
+    callback filter-add(string);
+    callback filter-clear-hits();
+
+    PanelShell {
+        title: "Filter lists";
+        sections: [ { section: "Installed lists", icon: "extensions" } ];
+        close => { root.close(); }
+        search-edited(t) => { }
+        section-picked(i) => { }
+
+        VerticalLayout {
+            spacing: 6px;
+
+            Text {
+                text: "The engine's filter lists ARE the extension system: rules run before DNS and sockets — zero kernel work per block. Custom rules use host/suffix or ##selector syntax.";
+                wrap: no-wrap;
+                overflow: elide;
+                font-size: Theme.font-size-s;
+                color: Theme.text-secondary;
+            }
+
+            HorizontalLayout {
+                spacing: 8px;
+                padding-top: 8px;
+                padding-bottom: 12px;
+
+                filter-input := Rectangle {
+                    height: 36px;
+                    border-radius: 8px;
+                    background: Theme.pill-bg;
+                    horizontal-stretch: 1;
+
+                    finput := TextInput {
+                        x: 12px;
+                        width: parent.width - 24px;
+                        height: parent.height;
+                        vertical-alignment: center;
+                        font-size: Theme.font-size-m;
+                        color: Theme.text-primary;
+                        single-line: true;
+                    }
+
+                    TouchArea { clicked => { finput.focus(); } }
+                }
+
+                FlatButton {
+                    text: "Add rule";
+                    primary: true;
+                    clicked => { root.filter-add(finput.text); finput.text = ""; }
+                }
+            }
+
+            for row in root.filters: Rectangle {
+                height: 52px;
+                background: Theme.dark ? #ffffff08 : #00000004;
+                border-radius: 8px;
+
+                HorizontalLayout {
+                    padding-left: 14px;
+                    padding-right: 8px;
+                    spacing: 12px;
+
+                    Icon {
+                        icon: "shield";
+                        icon-color: row.enabled ? Theme.accent : Theme.text-disabled;
+                        icon-size: 18px;
+                        y: (parent.height - self.height) / 2;
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        Text {
+                            text: row.rule;
+                            font-size: Theme.font-size-m;
+                            color: Theme.text-primary;
+                            overflow: elide;
+                        }
+                        Text {
+                            text: row.hits + " blocks this session";
+                            font-size: Theme.font-size-s;
+                            color: Theme.text-secondary;
+                        }
+                    }
+
+                    Toggle {
+                        checked: row.enabled;
+                        toggled(v) => { root.filter-toggled(row.id, v); }
+                        y: (parent.height - self.height) / 2;
+                    }
+
+                    IconButton {
+                        icon: "delete";
+                        tooltip: "Remove rule";
+                        clicked => { root.filter-delete(row.id); }
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 8px;
+                padding-top: 12px;
+                FlatButton { text: "Reset block counters"; clicked => { root.filter-clear-hits(); } }
+            }
+        }
+    }
+}
+
+export component DevtoolsPanel inherits Rectangle {
+    in property <bool> open: false;
+    in property <[DevtoolsLog]> logs;
+    in property <int> page-nodes;
+    in property <int> page-elements;
+    in property <int> page-scripts;
+    in property <int> page-stylesheets;
+    in property <int> page-images;
+    in property <int> cosmetic-hidden;
+    in property <int> blocked-count;
+    in property <string> protocol: "—";
+    in property <string> load-time: "—";
+    in property <string> page-url: "";
+
+    callback close();
+    callback run-js(string);
+    callback clear-console();
+
+    height: open ? 260px : 0;
+    background: Theme.dark ? #16171a : #fbfbfc;
+    clip: true;
+
+    if open: HorizontalLayout {
+        // console
+        VerticalLayout {
+            horizontal-stretch: 2;
+            padding: 6px;
+            spacing: 4px;
+
+            HorizontalLayout {
+                spacing: 8px;
+                height: 30px;
+
+                Text {
+                    text: "Console — " + root.page-url;
+                    font-size: Theme.font-size-s;
+                    color: Theme.text-secondary;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                    overflow: elide;
+                }
+                IconButton { icon: "delete"; size: 26px; icon-size: 14px; tooltip: "Clear"; clicked => { root.clear-console(); } }
+                IconButton { icon: "close"; size: 26px; icon-size: 14px; tooltip: "Close devtools"; clicked => { root.close(); } }
+            }
+
+            Flickable {
+                content-width: self.width;
+                content-height: logs-layout.preferred-height;
+
+                logs-layout := VerticalLayout {
+                    spacing: 2px;
+
+                    for entry in root.logs: HorizontalLayout {
+                        spacing: 8px;
+                        height: 22px;
+
+                        Text {
+                            text: entry.at;
+                            color: Theme.text-disabled;
+                            font-size: Theme.font-size-xs;
+                            vertical-alignment: center;
+                            width: 52px;
+                        }
+                        Rectangle {
+                            width: 6px;
+                            height: 6px;
+                            border-radius: 3px;
+                            y: 8px;
+                            background: entry.level == "error" ? Theme.danger
+                                : entry.level == "warn" ? Theme.warning
+                                : entry.level == "result" ? Theme.accent : Theme.text-secondary;
+                        }
+                        Text {
+                            text: entry.text;
+                            color: entry.level == "error" ? Theme.danger
+                                : entry.level == "result" ? Theme.panel-item-active-text
+                                : Theme.text-primary;
+                            font-size: Theme.font-size-s;
+                            font-family: "DejaVu Sans Mono";
+                            vertical-alignment: center;
+                            overflow: elide;
+                            horizontal-stretch: 1;
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                height: 34px;
+                border-radius: 6px;
+                background: Theme.pill-bg;
+
+                js-input := TextInput {
+                    x: 12px;
+                    width: parent.width - 24px;
+                    height: parent.height;
+                    vertical-alignment: center;
+                    font-size: Theme.font-size-s;
+                    font-family: "DejaVu Sans Mono";
+                    color: Theme.text-primary;
+                    single-line: true;
+                    accepted => { root.run-js(self.text); self.text = ""; }
+                }
+
+                TouchArea { clicked => { js-input.focus(); } }
+            }
+        }
+
+        Rectangle { width: 1px; background: Theme.divider; }
+
+        // page info
+        VerticalLayout {
+            horizontal-stretch: 1;
+            padding: 12px;
+            spacing: 8px;
+
+            Text { text: "Page"; font-size: Theme.font-size-s; color: Theme.text-secondary; }
+            Text { text: "nodes: " + root.page-nodes; font-size: Theme.font-size-s; color: Theme.text-primary; }
+            Text { text: "elements: " + root.page-elements; font-size: Theme.font-size-s; color: Theme.text-primary; }
+            Text { text: "scripts: " + root.page-scripts; font-size: Theme.font-size-s; color: Theme.text-primary; }
+            Text { text: "stylesheets: " + root.page-stylesheets; font-size: Theme.font-size-s; color: Theme.text-primary; }
+            Text { text: "images: " + root.page-images; font-size: Theme.font-size-s; color: Theme.text-primary; }
+            Divider { }
+            Text { text: "cosmetic hidden: " + root.cosmetic-hidden; font-size: Theme.font-size-s; color: Theme.text-primary; }
+            Text { text: "blocked: " + root.blocked-count; font-size: Theme.font-size-s; color: Theme.text-primary; }
+            Text { text: "protocol: " + root.protocol; font-size: Theme.font-size-s; color: Theme.text-primary; }
+            Text { text: "load: " + root.load-time; font-size: Theme.font-size-s; color: Theme.text-primary; }
+        }
+    }
+}

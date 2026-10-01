@@ -1,0 +1,724 @@
+// browse-wed main window — composes the whole browser.
+
+import { Theme, TabItem, BookmarkItem, HistoryItem, DownloadItem, SuggestionItem, SpeedDialItem, PermissionRow, FilterRow, DevtoolsLog } from "theme.slint";
+export { Theme } from "theme.slint";
+import { Icon } from "components/icons.slint";
+import { IconButton, FlatButton } from "components/shared.slint";
+import { TabStrip } from "components/tabs.slint";
+import { Toolbar } from "components/toolbar.slint";
+import { BookmarksBar } from "components/bookmarks_bar.slint";
+import { PageView, BandData } from "components/page.slint";
+import { NewTabView } from "components/newtab.slint";
+import { SettingsView } from "components/settings.slint";
+import { BookmarksView, HistoryView, DownloadsView, PrivacyView, ExtensionsView, DevtoolsPanel } from "components/panels.slint";
+
+export enum ActiveView { page, new-tab, settings, bookmarks, history, downloads, privacy, extensions }
+
+export component BrowserWindow inherits Window {
+    title: "browse-wed";
+    preferred-width: 1360px;
+    preferred-height: 850px;
+    min-width: 760px;
+    min-height: 480px;
+    background: Theme.strip-bg;
+    default-font-family: "Inter";
+
+    // --- core state (Rust-driven) -------------------------------------------
+    in property <[TabItem]> tabs;
+    in property <ActiveView> view: ActiveView.new-tab;
+    in property <string> active-title: "New Tab";
+    in property <string> active-url: "";
+    in property <bool> loading: false;
+    in property <float> load-progress: 0;
+    in property <string> security: "secure";
+    in property <bool> can-go-back: false;
+    in property <bool> can-go-forward: false;
+    in property <bool> bookmarked: false;
+    in property <bool> menu-open: false;
+    in property <bool> devtools-open: false;
+    in property <bool> bookmarks-bar-visible: true;
+
+    // page surface
+    in property <[BandData]> bands;
+    in property <int> page-height: 100;
+    in property <color> page-background: #ffffff;
+    in property <int> zoom-percent: 100;
+
+    // find-in-page
+    in property <bool> find-open: false;
+    in property <string> find-text: "";
+    in property <int> match-count: 0;
+    in property <int> match-current: 0;
+    in property <string> hover-link: "";
+
+    // omnibox
+    in property <[SuggestionItem]> suggestions;
+    in property <int> suggestion-selected: -1;
+    in property <bool> suggestions-open: false;
+
+    // bookmarks bar
+    in property <[BookmarkItem]> bar-bookmarks;
+
+    // new tab page
+    in property <[SpeedDialItem]> dial;
+    in property <int> trackers-blocked: 0;
+    in property <int> ads-blocked: 0;
+    in property <int> tabs-open: 1;
+    in property <int> memory-mb: 0;
+    in property <bool> session-restore-available: false;
+    in property <string> search-engine-name: "DuckDuckGo";
+
+    // error / blocked / suspended surfaces
+    in property <string> error-title: "";
+    in property <string> error-detail: "";
+    in property <bool> error-visible: false;
+    in property <bool> blocked-visible: false;
+    in property <string> blocked-host: "";
+    in property <bool> suspended-visible: false;
+    in property <string> status-text: "";
+
+    // panels data
+    in-out property <int> settings-section: 0;
+    in property <[BookmarkItem]> all-bookmarks;
+    in property <[HistoryItem]> history-entries;
+    in property <[DownloadItem]> downloads;
+    in property <[FilterRow]> filters;
+    in property <[DevtoolsLog]> devtools-logs;
+    in property <[PermissionRow]> permissions;
+    in property <int> page-nodes: 0;
+    in property <int> page-elements: 0;
+    in property <int> page-scripts: 0;
+    in property <int> page-stylesheets: 0;
+    in property <int> page-images: 0;
+    in property <int> cosmetic-hidden: 0;
+    in property <int> blocked-count: 0;
+    in property <string> protocol: "—";
+    in property <string> load-time: "—";
+
+    // settings values
+    in property <string> theme-mode: "system";
+    in property <color> accent-color: #1a73e8;
+    in property <bool> adblock-on: true;
+    in property <bool> trackerlist-on: true;
+    in property <bool> cosmetic-on: true;
+    in property <bool> fingerprint-on: true;
+    in property <bool> doh-on: true;
+    in property <bool> https-only: true;
+    in property <bool> safebrowsing-on: true;
+    in property <string> cookie-policy: "partitioned";
+    in property <bool> clear-on-exit: false;
+    in property <bool> startup-restore: true;
+    in property <string> profile-dir: "";
+    in property <string> app-version: "0.1.0";
+    in property <int> suspend-secs: 300;
+    in property <bool> fullscreen: false;
+    in property <string> download-dir: "";
+
+    // privacy dashboard
+    in property <int> https-upgrades: 0;
+    in property <int> dns-queries: 0;
+    in property <int> fingerprints-defeated: 0;
+    in property <string> memory-pressure: "none";
+    in property <int> live-pages: 0;
+    in property <int> suspended-tabs: 0;
+    in property <int> cache-mb: 0;
+    in property <int> js-heap-mb: 0;
+
+    // --- commands to Rust -------------------------------------------------------
+    callback navigate(string);
+    callback back();
+    callback forward();
+    callback reload();
+    callback stop();
+    callback home();
+    callback new-tab();
+    callback close-tab(int);
+    callback activate-tab(int);
+    callback reopen-closed();
+    callback pin-toggle(int);
+    callback suspend-toggle(int);
+    callback group-new(int);
+    callback duplicate-tab(int);
+    callback close-others(int);
+    callback drag-beyond(int, int);
+    callback bookmark-toggle();
+    callback open-view(ActiveView);
+    callback close-panel();
+    callback find-open-request();
+    callback find-changed(string);
+    callback find-next();
+    callback find-previous();
+    callback find-close();
+    callback zoom-in();
+    callback zoom-out();
+    callback zoom-reset();
+    callback fullscreen-toggle();
+    callback print-page();
+    callback save-page();
+    callback page-clicked(length, length);
+    callback page-hovered(length, length);
+    callback scroll-changed(int);
+    callback suggestion-picked(SuggestionItem);
+    callback omnibox-edited(string);
+    callback omnibox-focus();
+    callback menu-close();
+    callback devtools-close();
+    callback run-js(string);
+    callback devtools-clear();
+    callback search-submitted(string);
+    callback dial-picked(string);
+    callback restore-session();
+    callback bookmark-open(string);
+    callback bookmark-delete(int);
+    callback bookmark-edit(int);
+    callback bookmark-import();
+    callback bookmark-export();
+    callback bookmark-new-folder();
+    callback bookmark-right-click(int);
+    callback history-open(string);
+    callback history-delete(int);
+    callback history-clear();
+    callback download-pause-resume(int);
+    callback download-cancel(int);
+    callback download-retry(int);
+    callback download-open(int);
+    callback download-show(int);
+    callback downloads-clear-finished();
+    callback setting-theme(string);
+    callback setting-accent(string);
+    callback setting-adblock(bool);
+    callback setting-trackerlist(bool);
+    callback setting-cosmetic(bool);
+    callback setting-fingerprint(bool);
+    callback setting-doh(bool);
+    callback setting-https-only(bool);
+    callback setting-safebrowsing(bool);
+    callback setting-search-engine(string);
+    callback setting-homepage(string);
+    callback setting-startup-restore(bool);
+    callback setting-bookmarks-bar(bool);
+    callback setting-cookie-policy(string);
+    callback setting-clear-on-exit(bool);
+    callback setting-suspend-secs(int);
+    callback clear-browsing-data();
+    callback clear-cache();
+    callback clear-cookies();
+    callback permission-reset(string);
+    callback permission-reset-all();
+    callback filter-toggled(int, bool);
+    callback filter-delete(int);
+    callback filter-add(string);
+    callback filter-clear-hits();
+    callback open-profile-folder();
+    callback open-download-folder();
+    callback viewport-resized(int, int);
+    callback quit();
+
+    in-out property <int> omnibox-focus-pulse: 0;
+
+    forward-focus: kb-shortcuts;
+
+    changed width => {
+        root.viewport-resized(Math.round(self.width / 1px), Math.round(self.height / 1px));
+    }
+    changed height => {
+        root.viewport-resized(Math.round(self.width / 1px), Math.round(self.height / 1px));
+    }
+
+    VerticalLayout {
+        if !root.fullscreen: TabStrip {
+            tabs: root.tabs;
+            new-tab => { root.new-tab(); }
+            close-tab(id) => { root.close-tab(id); }
+            activate(id) => { root.activate-tab(id); }
+            pin-toggle(id) => { root.pin-toggle(id); }
+            suspend-toggle(id) => { root.suspend-toggle(id); }
+            group-new(id) => { root.group-new(id); }
+            duplicate(id) => { root.duplicate-tab(id); }
+            close-others(id) => { root.close-others(id); }
+            drag-beyond(id, dir) => { root.drag-beyond(id, dir); }
+        }
+
+        if !root.fullscreen: Toolbar {
+            url-text: root.active-url;
+            security: root.security;
+            can-go-back: root.can-go-back;
+            can-go-forward: root.can-go-forward;
+            loading: root.loading;
+            progress: root.load-progress;
+            bookmarked: root.bookmarked;
+            suggestions: root.suggestions;
+            suggestion-selected: root.suggestion-selected;
+            suggestions-open: root.suggestions-open;
+            adblock-active: root.adblock-on || root.trackerlist-on;
+            blocked-session: root.trackers-blocked + root.ads-blocked;
+            menu-open: root.menu-open;
+            focus-pulse: root.omnibox-focus-pulse;
+
+            back() => { root.back(); }
+            forward() => { root.forward(); }
+            reload() => { root.reload(); }
+            stop() => { root.stop(); }
+            home() => { root.home(); }
+            navigate-request(url) => { root.navigate(url); }
+            bookmark-toggle() => { root.bookmark-toggle(); }
+            open-bookmarks() => { root.open-view(ActiveView.bookmarks); }
+            open-downloads() => { root.open-view(ActiveView.downloads); }
+            open-history() => { root.open-view(ActiveView.history); }
+            open-settings() => { root.open-view(ActiveView.settings); }
+            open-privacy() => { root.open-view(ActiveView.privacy); }
+            open-devtools() => { root.devtools-toggle(); }
+            open-extensions() => { root.open-view(ActiveView.extensions); }
+            open-menu(x, y) => { root.menu-toggle(); }
+            print-page() => { root.print-page(); }
+            save-page() => { root.save-page(); }
+            find-open() => { root.find-open-request(); }
+            zoom-in() => { root.zoom-in(); }
+            zoom-out() => { root.zoom-out(); }
+            zoom-reset() => { root.zoom-reset(); }
+            fullscreen-toggle() => { root.fullscreen-toggle(); }
+            suggestion-picked(item) => { root.suggestion-picked(item); }
+            omnibox-edited(t) => { root.omnibox-edited(t); }
+            omnibox-focused() => { root.omnibox-focus(); }
+            omnibox-blurred() => { root.suggestions-close(); }
+            menu-close() => { root.menu-close(); }
+            new-tab() => { root.new-tab(); }
+            reopen-closed() => { root.reopen-closed(); }
+        }
+
+        if !root.fullscreen && root.bookmarks-bar-visible: BookmarksBar {
+            bookmarks: root.bar-bookmarks;
+            visible-bar: root.bookmarks-bar-visible;
+            picked(url) => { root.bookmark-open(url); }
+            bookmark-right-click(id) => { root.bookmark-delete(id); }
+            open-manager() => { root.open-view(ActiveView.bookmarks); }
+            open-all() => { }
+        }
+
+        // --- content area -----------------------------------------------------
+        Rectangle {
+            vertical-stretch: 1;
+
+            if root.view == ActiveView.page: PageView {
+                bands: root.bands;
+                page-height: root.page-height;
+                page-background: root.page-background;
+                loading: root.loading;
+                zoom-percent: root.zoom-percent;
+                find-open: root.find-open;
+                find-text: root.find-text;
+                match-count: root.match-count;
+                match-current: root.match-current;
+                hover-link: root.hover-link;
+
+                page-clicked(x, y) => { root.page-clicked(x, y); }
+                page-hovered(x, y) => { root.page-hovered(x, y); }
+                scroll-changed(y) => { root.scroll-changed(y); }
+                find-changed(t) => { root.find-changed(t); }
+                find-next() => { root.find-next(); }
+                find-previous() => { root.find-previous(); }
+                find-close() => { root.find-close(); }
+                zoom-in() => { root.zoom-in(); }
+                zoom-out() => { root.zoom-out(); }
+                zoom-reset() => { root.zoom-reset(); }
+            }
+
+            if root.view == ActiveView.new-tab: NewTabView {
+                search-engine-name: root.search-engine-name;
+                dial: root.dial;
+                trackers-blocked: root.trackers-blocked;
+                ads-blocked: root.ads-blocked;
+                tabs-open: root.tabs-open;
+                memory-mb: root.memory-mb;
+                session-restore-available: root.session-restore-available;
+                page-background: root.page-background;
+                search-submitted(t) => { root.search-submitted(t); }
+                dial-picked(url) => { root.dial-picked(url); }
+                restore-session() => { root.restore-session(); }
+            }
+
+            if root.view == ActiveView.settings: SettingsView {
+                section-index: root.settings-section;
+                theme-mode: root.theme-mode;
+                accent-color: root.accent-color;
+                adblock-on: root.adblock-on;
+                trackerlist-on: root.trackerlist-on;
+                cosmetic-on: root.cosmetic-on;
+                fingerprint-on: root.fingerprint-on;
+                doh-on: root.doh-on;
+                https-only: root.https-only;
+                safebrowsing-on: root.safebrowsing-on;
+                search-engine: root.search-engine-name;
+                homepage: root.homepage;
+                startup-restore: root.startup-restore;
+                bookmarks-bar-visible: root.bookmarks-bar-visible;
+                cookie-policy: root.cookie-policy;
+                clear-on-exit: root.clear-on-exit;
+                suspend-secs: root.suspend-secs;
+                profile-dir: root.profile-dir;
+                version: root.app-version;
+                permissions: root.permissions;
+
+                close() => { root.close-panel(); }
+                search-edited(t) => { root.settings-search(t); }
+                section-changed-index(i) => { root.settings-section = i; }
+                theme-changed(m) => { root.setting-theme(m); }
+                accent-changed(a) => { root.setting-accent(a); }
+                adblock-changed(v) => { root.setting-adblock(v); }
+                trackerlist-changed(v) => { root.setting-trackerlist(v); }
+                cosmetic-changed(v) => { root.setting-cosmetic(v); }
+                fingerprint-changed(v) => { root.setting-fingerprint(v); }
+                doh-changed(v) => { root.setting-doh(v); }
+                https-only-changed(v) => { root.setting-https-only(v); }
+                safebrowsing-changed(v) => { root.setting-safebrowsing(v); }
+                search-engine-changed(e) => { root.setting-search-engine(e); }
+                homepage-changed(h) => { root.setting-homepage(h); }
+                startup-restore-changed(v) => { root.setting-startup-restore(v); }
+                bookmarks-bar-changed(v) => { root.setting-bookmarks-bar(v); }
+                cookie-policy-changed(p) => { root.setting-cookie-policy(p); }
+                clear-on-exit-changed(v) => { root.setting-clear-on-exit(v); }
+                suspend-secs-changed(s) => { root.setting-suspend-secs(s); }
+                clear-browsing-data() => { root.clear-browsing-data(); }
+                clear-cache() => { root.clear-cache(); }
+                clear-cookies() => { root.clear-cookies(); }
+                open-profile-folder() => { root.open-profile-folder(); }
+                open-download-folder() => { root.open-download-folder(); }
+                open-downloads-panel() => { root.open-view(ActiveView.downloads); }
+                permission-reset(site) => { root.permission-reset(site); }
+                permission-reset-all() => { root.permission-reset-all(); }
+            }
+
+            if root.view == ActiveView.bookmarks: BookmarksView {
+                bookmarks: root.all-bookmarks;
+                section-index: 0;
+                close() => { root.close-panel(); }
+                open(url) => { root.bookmark-open(url); }
+                delete-bookmark(id) => { root.bookmark-delete(id); }
+                edit-bookmark(id) => { root.bookmark-edit(id); }
+                import-bookmarks() => { root.bookmark-import(); }
+                export-bookmarks() => { root.bookmark-export(); }
+                new-folder() => { root.bookmark-new-folder(); }
+                search-edited(t) => { root.bookmarks-search(t); }
+                section-picked(i) => { }
+            }
+
+            if root.view == ActiveView.history: HistoryView {
+                entries: root.history-entries;
+                section-index: 0;
+                close() => { root.close-panel(); }
+                open(url) => { root.history-open(url); }
+                delete-entry(id) => { root.history-delete(id); }
+                clear-all() => { root.history-clear(); }
+                search-edited(t) => { root.history-search(t); }
+                section-picked(i) => { }
+            }
+
+            if root.view == ActiveView.downloads: DownloadsView {
+                downloads: root.downloads;
+                close() => { root.close-panel(); }
+                pause-resume(id) => { root.download-pause-resume(id); }
+                cancel(id) => { root.download-cancel(id); }
+                retry(id) => { root.download-retry(id); }
+                open-file(id) => { root.download-open(id); }
+                show-in-folder(id) => { root.download-show(id); }
+                clear-finished() => { root.downloads-clear-finished(); }
+            }
+
+            if root.view == ActiveView.privacy: PrivacyView {
+                trackers-blocked: root.trackers-blocked;
+                ads-blocked: root.ads-blocked;
+                https-upgrades: root.https-upgrades;
+                dns-queries: root.dns-queries;
+                fingerprints-defeated: root.fingerprints-defeated;
+                adblock-on: root.adblock-on;
+                trackerlist-on: root.trackerlist-on;
+                cosmetic-on: root.cosmetic-on;
+                fingerprint-on: root.fingerprint-on;
+                doh-on: root.doh-on;
+                safebrowsing-on: root.safebrowsing-on;
+                pressure: root.memory-pressure;
+                live-pages: root.live-pages;
+                suspended-tabs: root.suspended-tabs;
+                cache-mb: root.cache-mb;
+                js-heap-mb: root.js-heap-mb;
+                close() => { root.close-panel(); }
+                adblock-changed(v) => { root.setting-adblock(v); }
+                trackerlist-changed(v) => { root.setting-trackerlist(v); }
+                cosmetic-changed(v) => { root.setting-cosmetic(v); }
+                fingerprint-changed(v) => { root.setting-fingerprint(v); }
+                doh-changed(v) => { root.setting-doh(v); }
+                safebrowsing-changed(v) => { root.setting-safebrowsing(v); }
+            }
+
+            if root.view == ActiveView.extensions: ExtensionsView {
+                filters: root.filters;
+                close() => { root.close-panel(); }
+                filter-toggled(id, v) => { root.filter-toggled(id, v); }
+                filter-delete(id) => { root.filter-delete(id); }
+                filter-add(rule) => { root.filter-add(rule); }
+                filter-clear-hits() => { root.filter-clear-hits(); }
+            }
+
+            // --- error / blocked / suspended overlays --------------------------
+            if root.error-visible && root.view == ActiveView.page: Rectangle {
+                background: root.page-background;
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 12px;
+                    padding: 60px;
+
+                    HorizontalLayout {
+                        alignment: start;
+                        spacing: 14px;
+
+                        Icon { icon: "warning"; icon-color: Theme.insecure; icon-size: 40px; }
+                        Text {
+                            text: root.error-title;
+                            font-size: 24px;
+                            font-weight: 500;
+                            color: Theme.text-primary;
+                            vertical-alignment: center;
+                        }
+                    }
+                    Text {
+                        text: root.error-detail;
+                        wrap: word-wrap;
+                        font-size: Theme.font-size-m;
+                        color: Theme.text-secondary;
+                    }
+                    HorizontalLayout {
+                        alignment: start;
+                        spacing: 8px;
+                        padding-top: 12px;
+                        FlatButton { text: "Try again"; primary: true; clicked => { root.reload(); } }
+                    }
+                }
+            }
+
+            if root.blocked-visible && root.view == ActiveView.page: Rectangle {
+                background: root.page-background;
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 12px;
+                    padding: 60px;
+
+                    Icon { icon: "shield-check"; icon-color: Theme.accent; icon-size: 48px; }
+                    Text {
+                        text: "Blocked: " + root.blocked-host;
+                        font-size: 24px;
+                        font-weight: 500;
+                        color: Theme.text-primary;
+                    }
+                    Text {
+                        text: "This request matched a filter list rule and was dropped before any DNS query, socket, or TLS handshake — zero kernel work.";
+                        wrap: word-wrap;
+                        font-size: Theme.font-size-m;
+                        color: Theme.text-secondary;
+                        horizontal-alignment: center;
+                    }
+                    FlatButton { text: "Open privacy dashboard"; clicked => { root.open-view(ActiveView.privacy); } }
+                }
+            }
+
+            if root.suspended-visible && root.view == ActiveView.page: Rectangle {
+                background: root.page-background;
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 14px;
+
+                    Icon { icon: "moon"; icon-color: Theme.text-secondary; icon-size: 48px; }
+                    Text {
+                        text: "This tab is suspended";
+                        font-size: 24px;
+                        font-weight: 500;
+                        color: Theme.text-primary;
+                    }
+                    Text {
+                        text: "Its JS heap and DOM were freed (≈100 bytes retained). Reloading is usually an instant cache hit.";
+                        wrap: word-wrap;
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-size-m;
+                        horizontal-alignment: center;
+                    }
+                    FlatButton { text: "Wake this tab"; primary: true; clicked => { root.reload(); } }
+                }
+            }
+
+            // status bar
+            if root.status-text != "" && root.view == ActiveView.page: Rectangle {
+                y: parent.height - 24px;
+                height: 24px;
+                width: Math.min(st.preferred-width + 24px, parent.width);
+                background: Theme.dark ? #292a2df2 : #ffffffff;
+                border-width: 1px;
+                border-color: Theme.divider;
+
+                st := Text {
+                    x: 10px;
+                    text: root.status-text;
+                    font-size: Theme.font-size-s;
+                    color: Theme.text-secondary;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+        }
+
+        DevtoolsPanel {
+            open: root.devtools-open;
+            logs: root.devtools-logs;
+            page-nodes: root.page-nodes;
+            page-elements: root.page-elements;
+            page-scripts: root.page-scripts;
+            page-stylesheets: root.page-stylesheets;
+            page-images: root.page-images;
+            cosmetic-hidden: root.cosmetic-hidden;
+            blocked-count: root.blocked-count;
+            protocol: root.protocol;
+            load-time: root.load-time;
+            page-url: root.active-url;
+            close() => { root.devtools-close(); }
+            run-js(code) => { root.run-js(code); }
+            clear-console() => { root.devtools-clear(); }
+        }
+    }
+
+    // --- global keyboard shortcuts -------------------------------------------
+    kb-shortcuts := FocusScope {
+        x: 0; y: 0; width: 100%; height: 100%;
+
+        key-pressed(event) => {
+            // Ctrl+T — new tab
+            if (event.modifiers.control && event.text == "t") {
+                root.new-tab();
+                return accept;
+            }
+            // Ctrl+W — close tab
+            if (event.modifiers.control && event.text == "w") {
+                root.close-active-tab();
+                return accept;
+            }
+            // Ctrl+Shift+T — reopen closed
+            if (event.modifiers.control && event.modifiers.shift && event.text == "T") {
+                root.reopen-closed();
+                return accept;
+            }
+            // Ctrl+L — focus omnibox
+            if (event.modifiers.control && event.text == "l") {
+                root.focus-omnibox();
+                return accept;
+            }
+            // Ctrl+D — bookmark
+            if (event.modifiers.control && event.text == "d") {
+                root.bookmark-toggle();
+                return accept;
+            }
+            // Ctrl+F — find
+            if (event.modifiers.control && event.text == "f") {
+                root.find-open-request();
+                return accept;
+            }
+            // Ctrl+R / F5 — reload
+            if ((event.modifiers.control && event.text == "r") || event.text == Key.F5) {
+                root.reload();
+                return accept;
+            }
+            // Ctrl+J — downloads
+            if (event.modifiers.control && event.text == "j") {
+                root.open-view(ActiveView.downloads);
+                return accept;
+            }
+            // Ctrl+H — history
+            if (event.modifiers.control && event.text == "h") {
+                root.open-view(ActiveView.history);
+                return accept;
+            }
+            // Ctrl+, — settings
+            if (event.modifiers.control && event.text == ",") {
+                root.open-view(ActiveView.settings);
+                return accept;
+            }
+            // Ctrl+Shift+A — privacy dashboard
+            if (event.modifiers.control && event.modifiers.shift && event.text == "A") {
+                root.open-view(ActiveView.privacy);
+                return accept;
+            }
+            // Ctrl+Plus / Minus / 0 — zoom
+            if (event.modifiers.control && (event.text == "+" || event.text == "=")) {
+                root.zoom-in();
+                return accept;
+            }
+            if (event.modifiers.control && event.text == "-") {
+                root.zoom-out();
+                return accept;
+            }
+            if (event.modifiers.control && event.text == "0") {
+                root.zoom-reset();
+                return accept;
+            }
+            // F11 — fullscreen
+            if (event.text == Key.F11) {
+                root.fullscreen-toggle();
+                return accept;
+            }
+            // F12 — devtools
+            if (event.text == Key.F12) {
+                root.devtools-toggle();
+                return accept;
+            }
+            // Ctrl+P — print
+            if (event.modifiers.control && event.text == "p") {
+                root.print-page();
+                return accept;
+            }
+            // Ctrl+S — save page
+            if (event.modifiers.control && event.text == "s") {
+                root.save-page();
+                return accept;
+            }
+            // Alt+Left/Right — history nav
+            if (event.modifiers.alt && event.text == Key.LeftArrow) {
+                root.back();
+                return accept;
+            }
+            if (event.modifiers.alt && event.text == Key.RightArrow) {
+                root.forward();
+                return accept;
+            }
+            // Ctrl+Shift+PageUp/PageDown — move tab
+            if (event.modifiers.control && event.modifiers.shift && event.text == Key.PageUp) {
+                root.tab-move(-1);
+                return accept;
+            }
+            if (event.modifiers.control && event.modifiers.shift && event.text == Key.PageDown) {
+                root.tab-move(1);
+                return accept;
+            }
+            // Ctrl+Tab — next tab
+            if (event.modifiers.control && event.text == Key.Tab) {
+                root.tab-cycle(1);
+                return accept;
+            }
+            // Escape — close overlays
+            if (event.text == Key.Escape) {
+                if (root.find-open) { root.find-close(); }
+                else if (root.loading) { root.stop(); }
+                else if (root.menu-open) { root.menu-close(); }
+                return accept;
+            }
+            reject
+        }
+    }
+
+    callback close-active-tab();
+    callback focus-omnibox();
+    callback tab-move(int);
+    callback tab-cycle(int);
+    callback devtools-toggle();
+    callback menu-toggle();
+    callback suggestions-close();
+    callback settings-search(string);
+    callback bookmarks-search(string);
+    callback history-search(string);
+    in property <string> homepage: "";
+}

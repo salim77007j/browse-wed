@@ -10,6 +10,7 @@ members = [
     "api",
     "tests",
     "benchmarks",
+    "ui",
 ]
 
 [workspace.package]
@@ -120,6 +121,10 @@ windows-sys = { version = "0.60", features = [
 tempfile = "3"
 criterion = { version = "0.5", features = ["html_reports"] }
 arbitrary = { version = "1", features = ["derive"] }
+
+[profile.dev]
+debug = "line-tables-only"
+incremental = true
 
 [profile.release]
 opt-level = 3

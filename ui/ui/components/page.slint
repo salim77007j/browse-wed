@@ -1,0 +1,184 @@
+// Page content surface: stacked painted band images inside a Flickable.
+// Bands are produced by the Rust layout/paint pipeline (cosmic-text +
+// tiny-skia); this view owns scrolling, link hit-testing (viewport-space
+// TouchArea), find-in-page bar, and the zoom pill.
+
+import { Theme } from "../theme.slint";
+import { Icon } from "icons.slint";
+import { IconButton, FlatButton } from "shared.slint";
+
+export struct BandData {
+    image: image,
+    height: int,        // px, band height in page space
+}
+
+export component PageView inherits Rectangle {
+    in property <[BandData]> bands;
+    in property <int> page-height;          // total laid-out height
+    in property <color> page-background: white;
+    in property <bool> loading;
+    in property <int> zoom-percent: 100;
+
+    // find-in-page
+    in property <bool> find-open;
+    in property <string> find-text;
+    in property <int> match-count;
+    in property <int> match-current;
+
+    // hover link preview (status bubble)
+    in property <string> hover-link;
+
+    callback page-clicked(length, length);
+    callback page-hovered(length, length);
+    callback scroll-changed(int);
+    callback find-changed(string);
+    callback find-next();
+    callback find-previous();
+    callback find-close();
+    callback zoom-in();
+    callback zoom-out();
+    callback zoom-reset();
+
+    background: page-background;
+
+
+    fl := Flickable {
+        width: 100%;
+        height: 100%;
+
+        content-width: root.width;
+        content-height: Math.max(root.page-height * 1px, root.height);
+
+        VerticalLayout {
+            width: root.width;
+
+            for band in root.bands: Image {
+                height: band.height * 1px;
+                width: 100%;
+                source: band.image;
+                image-fit: fill;
+            }
+        }
+
+        // Viewport-space link hit-testing layer (topmost inside viewport).
+        hit := TouchArea {
+            y: 0;
+            x: 0;
+            width: root.width;
+            height: Math.max(root.page-height * 1px, root.height);
+
+            mouse-cursor: MouseCursor.pointer;
+
+            clicked => {
+                root.page-clicked(self.mouse-x, self.mouse-y);
+            }
+
+            moved => {
+                root.page-hovered(self.mouse-x, self.mouse-y);
+            }
+        }
+
+        changed viewport-y => {
+            root.scroll-changed(Math.round(-self.content-y / 1px));
+        }
+    }
+
+    // --- find bar ---------------------------------------------------------------
+    if root.find-open: Rectangle {
+        init => { fi.focus(); }
+        x: parent.width - self.width - 18px;
+        y: 12px;
+        width: 348px;
+        height: 42px;
+        border-radius: Theme.radius-pill;
+        background: Theme.surface;
+        border-width: 1px;
+        border-color: Theme.divider;
+        drop-shadow-blur: 14px;
+        drop-shadow-color: #0000003d;
+        drop-shadow-offset-y: 2px;
+
+        HorizontalLayout {
+            padding-left: 16px;
+            padding-right: 6px;
+            spacing: 2px;
+
+            fi := TextInput {
+                width: 170px;
+                vertical-alignment: center;
+                font-size: Theme.font-size-m;
+                color: Theme.text-primary;
+                text: root.find-text;
+                single-line: true;
+                edited => { root.find-changed(self.text); }
+                accepted => { root.find-next(); }
+            }
+
+            Text {
+                text: root.match-count == 0 && root.find-text == "" ? ""
+                    : (root.match-count == 0 ? "0/0"
+                    : root.match-current + "/" + root.match-count);
+                font-size: Theme.font-size-s;
+                color: Theme.text-secondary;
+                vertical-alignment: center;
+                width: 44px;
+            }
+
+            IconButton { icon: "chevron-down"; size: 30px; icon-size: 15px; tooltip: "Previous (Shift+Enter)"; clicked => { root.find-previous(); } }
+            IconButton { icon: "chevron-down"; size: 30px; icon-size: 15px; tooltip: "Next (Enter)"; clicked => { root.find-next(); } }
+            IconButton { icon: "close"; size: 30px; icon-size: 15px; tooltip: "Close (Esc)"; clicked => { root.find-close(); } }
+        }
+
+    }
+
+    // --- zoom pill ---------------------------------------------------------------
+    if root.zoom-percent != 100: Rectangle {
+        x: parent.width - self.width - 18px;
+        y: parent.height - self.height - 16px;
+        width: 148px;
+        height: 36px;
+        border-radius: Theme.radius-pill;
+        background: Theme.surface;
+        border-width: 1px;
+        border-color: Theme.divider;
+        drop-shadow-blur: 10px;
+        drop-shadow-color: #00000033;
+
+        HorizontalLayout {
+            padding: 2px;
+            spacing: 0px;
+
+            IconButton { icon: "zoom-out"; size: 32px; icon-size: 15px; tooltip: "Zoom out"; clicked => { root.zoom-out(); } }
+            Text {
+                text: root.zoom-percent + "%";
+                font-size: Theme.font-size-m;
+                color: Theme.text-primary;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+                width: 48px;
+            }
+            IconButton { icon: "zoom-in"; size: 32px; icon-size: 15px; tooltip: "Zoom in"; clicked => { root.zoom-in(); } }
+            IconButton { icon: "fullscreen-exit"; size: 32px; icon-size: 15px; tooltip: "Reset (Ctrl+0)"; clicked => { root.zoom-reset(); } }
+        }
+    }
+
+    // --- hover status bubble --------------------------------------------------------
+    if root.hover-link != "": Rectangle {
+        x: 0;
+        y: parent.height - 26px;
+        width: Math.min(hl.preferred-width + 24px, root.width);
+        height: 26px;
+        background: Theme.dark ? #292a2df2 : #ffffffff;
+        border-width: 1px;
+        border-color: Theme.divider;
+
+        hl := Text {
+            x: 12px;
+            text: root.hover-link;
+            font-size: Theme.font-size-s;
+            color: Theme.text-secondary;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+}

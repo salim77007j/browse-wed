@@ -40,6 +40,7 @@ pub mod page;
 pub mod session;
 pub mod tab;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -214,6 +215,8 @@ pub struct BrowserEngine {
     governor: Mutex<MemoryGovernor>,
     live: Mutex<std::collections::HashMap<TabId, LiveTab>>,
     startup: Startup,
+    /// Runtime kill-switch for cosmetic filtering (UI privacy toggle).
+    cosmetic_enabled: AtomicBool,
 }
 
 impl BrowserEngine {
@@ -287,7 +290,43 @@ impl BrowserEngine {
             governor: Mutex::new(governor),
             live: Mutex::new(std::collections::HashMap::new()),
             startup,
+            cosmetic_enabled: AtomicBool::new(true),
         }))
+    }
+
+    /// Cosmetic filter set to apply right now (empty when disabled).
+    fn effective_cosmetics(&self) -> &bw_privacy::cosmetic::CosmeticFilterSet {
+        static EMPTY: std::sync::OnceLock<bw_privacy::cosmetic::CosmeticFilterSet> =
+            std::sync::OnceLock::new();
+        if self.cosmetic_enabled.load(Ordering::Relaxed) {
+            &self.cosmetics
+        } else {
+            EMPTY.get_or_init(|| {
+                bw_privacy::cosmetic::CosmeticFilterSet::compile(Vec::<String>::new())
+            })
+        }
+    }
+
+    /// Runtime toggle: network filter pass (ads + trackers, one compiled set).
+    pub fn set_blocking_enabled(&self, enabled: bool) {
+        self.fetch.policy().set_filters_enabled(enabled);
+    }
+
+    /// Runtime toggle: cosmetic filtering.
+    pub fn set_cosmetic_enabled(&self, enabled: bool) {
+        self.cosmetic_enabled.store(enabled, Ordering::Relaxed);
+    }
+
+    /// Runtime toggle: Safe Browsing verdicts.
+    pub fn set_safebrowsing_enabled(&self, enabled: bool) {
+        self.fetch.policy().set_safebrowsing_enabled(enabled);
+    }
+
+    /// Runtime toggle: anti-fingerprinting mode.
+    pub fn set_fingerprint_mode(&self, mode: bw_privacy::fingerprint::FpMode) {
+        if let Ok(mut fp) = self.fingerprint.try_lock() {
+            fp.set_mode(mode);
+        }
     }
 
     /// Cold-start report.
@@ -354,7 +393,8 @@ impl BrowserEngine {
 
         let page = if is_html {
             let html = String::from_utf8_lossy(&response.body);
-            Some(page::build_page(&html, &host, &self.cosmetics))
+            let cosmetics = self.effective_cosmetics();
+            Some(page::build_page(&html, &host, cosmetics))
         } else {
             None
         };
@@ -407,7 +447,8 @@ impl BrowserEngine {
     ) -> Result<NavigationOutcome, EngineError> {
         let url = Url::parse(url_str).map_err(|e| EngineError::InvalidUrl(e.to_string()))?;
         let host = url.host_str().unwrap_or_default().to_string();
-        let page = page::build_page(html, &host, &self.cosmetics);
+        let cosmetics = self.effective_cosmetics();
+        let page = page::build_page(html, &host, cosmetics);
         let outcome = NavigationOutcome {
             final_url: url.as_str().to_string(),
             status: 200,
@@ -569,6 +610,36 @@ impl BrowserEngine {
         self.live.lock().await.get(&id).map(|t| t.page.stats)
     }
 
+    /// The renderable page model for a tab — the UI's page data (blocks,
+    /// styled runs, links, images), built from the live DOM. None when the
+    /// tab is suspended or holds no HTML page.
+    pub async fn page_snapshot(&self, id: TabId) -> Option<bw_render::PageModel> {
+        let live = self.live.lock().await;
+        let lt = live.get(&id)?;
+        let url = self
+            .tabs
+            .lock()
+            .await
+            .get(id)
+            .and_then(|t| t.current_url().map(str::to_string))
+            .unwrap_or_else(|| "about:blank".to_string());
+        Some(bw_render::extract_page_model(&lt.page.doc, &lt.page.hidden, &url))
+    }
+
+    /// Fetch one subresource through the full engine pipeline (policy
+    /// filters, cache, cookies, HTTPS upgrades) for UI-level consumers:
+    /// favicons, omnibox search suggestions, download chunks, save-page.
+    /// This is the ONLY network path the UI is allowed to use.
+    pub async fn fetch_subresource(
+        &self,
+        url: Url,
+        resource_type: bw_privacy::ResourceType,
+        top_level_site: &str,
+    ) -> Result<bw_network::FetchResponse, bw_network::FetchError> {
+        let req = FetchRequest::subresource(url, top_level_site, resource_type);
+        self.fetch.fetch(req).await
+    }
+
     /// Save the session to the profile directory.
     pub async fn save_session(&self) -> Result<(), EngineError> {
         let (tabs, next_id) = {
@@ -624,6 +695,17 @@ impl BrowserEngine {
     /// The shared filter set (devtools / UI list manager).
     pub fn filters(&self) -> &Arc<FilterSet> {
         &self.filters
+    }
+
+    /// The fetch pipeline service (the ONLY network path UI-level
+    /// consumers — downloads, favicons, suggestions — are allowed to use).
+    pub fn fetch_service(&self) -> &Arc<FetchService> {
+        &self.fetch
+    }
+
+    /// Empty the HTTP memory cache (settings action).
+    pub fn clear_http_cache(&self) {
+        self.cache.clear_memory();
     }
 
     /// The shared Safe Browsing database (prefix updates go here).

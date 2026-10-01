@@ -1,0 +1,440 @@
+// In-content management panels with the wed45 layout: left sidebar
+// (search + section list) and right content. Every control is wired to a
+// Rust callback — no dead UI.
+
+import { Theme, SettingsItem, PermissionRow } from "../theme.slint";
+import { Icon } from "icons.slint";
+import { IconButton, FlatButton, Toggle, SettingRow, Divider } from "shared.slint";
+import { BookmarkItem, HistoryItem, DownloadItem, FilterRow, PermissionRow } from "../theme.slint";
+
+component SideItem inherits Rectangle {
+    in property <string> icon;
+    in property <string> text;
+    in property <bool> active;
+    callback picked();
+
+    height: 40px;
+    border-radius: 8px;
+    background: root.active ? Theme.panel-item-active
+        : ta.has-hover ? Theme.panel-item-hover : transparent;
+
+    ta := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.picked(); }
+    }
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 12px;
+        spacing: 14px;
+
+        Icon {
+            icon: root.icon;
+            icon-color: root.active ? Theme.panel-item-active-text : Theme.text-secondary;
+            icon-size: 18px;
+            y: (parent.height - self.height) / 2;
+        }
+        Text {
+            text: root.text;
+            font-size: Theme.font-size-m;
+            font-weight: root.active ? 500 : 400;
+            color: root.active ? Theme.panel-item-active-text : Theme.text-primary;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component PanelShell inherits Rectangle {
+    in property <string> title;
+    in property <[SettingsItem]> sections;
+    in property <int> section-index;
+    in property <string> search-placeholder: "Search settings";
+
+    callback section-picked(int);
+    callback search-edited(string);
+    callback close();
+
+    callback section0(); callback section1(); callback section2();
+    callback section3(); callback section4(); callback section5();
+    callback section6(); callback section7();
+
+    background: Theme.page-bg;
+
+    HorizontalLayout {
+        // --- sidebar --------------------------------------------------------
+        Rectangle {
+            width: 268px;
+            background: Theme.page-bg;
+
+            VerticalLayout {
+                padding: 24px;
+                padding-top: 20px;
+                spacing: 14px;
+
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: start;
+
+                    IconButton {
+                        icon: "back";
+                        size: 34px;
+                        icon-color: Theme.text-secondary;
+                        tooltip: "Back to page";
+                        clicked => { root.close(); }
+                    }
+                    Text {
+                        text: root.title;
+                        font-size: Theme.font-size-xxl;
+                        font-weight: 500;
+                        color: Theme.text-primary;
+                        vertical-alignment: center;
+                    }
+                }
+
+                Rectangle {
+                    height: 38px;
+                    border-radius: 19px;
+                    background: Theme.pill-bg;
+
+                    HorizontalLayout {
+                        padding-left: 14px;
+                        padding-right: 10px;
+                        spacing: 10px;
+
+                        Icon {
+                            icon: "search";
+                            icon-color: Theme.text-secondary;
+                            icon-size: 16px;
+                            y: (parent.height - self.height) / 2;
+                        }
+                        TextInput {
+                            vertical-alignment: center;
+                            font-size: Theme.font-size-m;
+                            color: Theme.text-primary;
+                            single-line: true;
+                            edited => { root.search-edited(self.text); }
+                        }
+                    }
+                }
+
+                VerticalLayout {
+                    spacing: 2px;
+
+                    for sect[i] in root.sections: SideItem {
+                        icon: sect.icon;
+                        text: sect.section;
+                        active: i == root.section-index;
+                        picked => { root.section-picked(i); }
+                    }
+                }
+            }
+        }
+
+        Rectangle { width: 1px; background: Theme.divider; }
+
+        // --- content --------------------------------------------------------
+        Flickable {
+            content-width: Math.max(root.width - 270px, 320px);
+
+            VerticalLayout {
+                padding-left: 48px;
+                padding-right: 48px;
+                padding-top: 24px;
+                padding-bottom: 48px;
+                spacing: 6px;
+
+                @children
+            }
+        }
+    }
+}
+
+// ============================================================ settings views
+
+export component SettingsView inherits Rectangle {
+    // bound values
+    in property <int> section-index;
+    in property <string> theme-mode: "system";        // light | dark | system
+    in property <color> accent-color: #1a73e8;
+    in property <bool> adblock-on: true;
+    in property <bool> trackerlist-on: true;
+    in property <bool> cosmetic-on: true;
+    in property <bool> fingerprint-on: true;
+    in property <bool> doh-on: true;
+    in property <string> doh-url: "https://dns.quad9.net/dns-query";
+    in property <bool> https-only: true;
+    in property <bool> safebrowsing-on: true;
+    in property <string> search-engine: "DuckDuckGo";
+    in property <string> homepage: "";
+    in property <bool> startup-restore: true;
+    in property <bool> bookmarks-bar-visible: true;
+    in property <string> cookie-policy: "partitioned"; // partitioned | block-3p | block-all
+    in property <bool> clear-on-exit: false;
+    in property <int> suspend-secs: 300;
+    in property <string> profile-dir: "";
+    in property <string> version: "0.1.0";
+
+    // callbacks
+    callback close();
+    callback theme-changed(string);
+    callback accent-changed(string);
+    callback adblock-changed(bool);
+    callback trackerlist-changed(bool);
+    callback cosmetic-changed(bool);
+    callback fingerprint-changed(bool);
+    callback doh-changed(bool);
+    callback doh-url-changed(string);
+    callback https-only-changed(bool);
+    callback safebrowsing-changed(bool);
+    callback search-engine-changed(string);
+    callback homepage-changed(string);
+    callback startup-restore-changed(bool);
+    callback bookmarks-bar-changed(bool);
+    callback cookie-policy-changed(string);
+    callback clear-on-exit-changed(bool);
+    callback suspend-secs-changed(int);
+    callback clear-browsing-data();
+    callback clear-cache();
+    callback clear-cookies();
+    callback open-profile-folder();
+
+    PanelShell {
+        title: "Settings";
+        sections: [
+            { section: "Appearance", icon: "palette" },
+            { section: "Search engine", icon: "search" },
+            { section: "Privacy and security", icon: "privacy" },
+            { section: "Startup", icon: "startup" },
+            { section: "Downloads", icon: "download" },
+            { section: "Site permissions", icon: "eye" },
+            { section: "Advanced", icon: "settings" },
+            { section: "About", icon: "info" },
+        ];
+        section-index: root.section-index;
+        close => { root.close(); }
+        search-edited(t) => { root.search-edited(t); }
+        section-picked(i) => { root.section-changed-index(i); }
+
+        if root.section-index == 0: VerticalLayout {
+            spacing: 6px;
+
+            Text { text: "Appearance"; font-size: Theme.font-size-xxl; font-weight: 500; color: Theme.text-primary; }
+            Divider { }
+
+            SettingRow {
+                icon: "sun"; title: "Theme"; subtitle: "Light, dark, or follow the system";
+                value-text: root.theme-mode;
+                clicked => {
+                    root.theme-changed(root.theme-mode == "light" ? "dark"
+                        : root.theme-mode == "dark" ? "system" : "light");
+                }
+            }
+            SettingRow {
+                icon: "palette"; title: "Accent color"; subtitle: "Used for links, buttons, and highlights";
+                has-toggle: false;
+                clicked => { root.accent-changed("cycle"); }
+                Rectangle {
+                    width: 28px; height: 28px; border-radius: 14px;
+                    background: root.accent-color;
+                    y: (parent.height - self.height) / 2;
+                }
+            }
+            SettingRow {
+                icon: "bookmarks"; title: "Show bookmarks bar";
+                subtitle: "Always show the bar below the address bar";
+                has-toggle: true; checked: root.bookmarks-bar-visible;
+                toggled(v) => { root.bookmarks-bar-changed(v); }
+            }
+        }
+
+        if root.section-index == 1: VerticalLayout {
+            spacing: 6px;
+
+            Text { text: "Search engine"; font-size: Theme.font-size-xxl; font-weight: 500; color: Theme.text-primary; }
+            Divider { }
+
+            for engine in ["DuckDuckGo", "Brave Search", "Startpage", "Mojeek", "Wikipedia"]: SettingRow {
+                icon: "search";
+                title: engine;
+                subtitle: engine == "DuckDuckGo" ? "Private by default — no tracking profiles" : "";
+                value-text: root.search-engine == engine ? "✓" : "";
+                clicked => { root.search-engine-changed(engine); }
+            }
+        }
+
+        if root.section-index == 2: VerticalLayout {
+            spacing: 6px;
+
+            Text { text: "Privacy and security"; font-size: Theme.font-size-xxl; font-weight: 500; color: Theme.text-primary; }
+            Divider { }
+
+            SettingRow {
+                icon: "shield"; title: "Block ads"; subtitle: "Network filter list — blocks before DNS or sockets";
+                has-toggle: true; checked: root.adblock-on;
+                toggled(v) => { root.adblock-changed(v); }
+            }
+            SettingRow {
+                icon: "privacy"; title: "Block trackers"; subtitle: "Tracker domains dropped with zero kernel work";
+                has-toggle: true; checked: root.trackerlist-on;
+                toggled(v) => { root.trackerlist-changed(v); }
+            }
+            SettingRow {
+                icon: "eye"; title: "Cosmetic filtering"; subtitle: "Hide ad slots the network filters can't block";
+                has-toggle: true; checked: root.cosmetic-on;
+                toggled(v) => { root.cosmetic-changed(v); }
+            }
+            SettingRow {
+                icon: "fingerprint"; title: "Anti-fingerprinting"; subtitle: "Farbles canvas, audio, and font probes per site";
+                has-toggle: true; checked: root.fingerprint-on;
+                toggled(v) => { root.fingerprint-changed(v); }
+            }
+            SettingRow {
+                icon: "globe"; title: "DNS-over-HTTPS"; subtitle: "Encrypted DNS resolution";
+                has-toggle: true; checked: root.doh-on;
+                toggled(v) => { root.doh-changed(v); }
+            }
+            SettingRow {
+                icon: "lock"; title: "HTTPS upgrades"; subtitle: "Upgrade http navigations to https";
+                has-toggle: true; checked: root.https-only;
+                toggled(v) => { root.https-only-changed(v); }
+            }
+            SettingRow {
+                icon: "warning"; title: "Safe browsing"; subtitle: "Phishing/malware interstitials";
+                has-toggle: true; checked: root.safebrowsing-on;
+                toggled(v) => { root.safebrowsing-changed(v); }
+            }
+        }
+
+        if root.section-index == 3: VerticalLayout {
+            spacing: 6px;
+
+            Text { text: "Startup"; font-size: Theme.font-size-xxl; font-weight: 500; color: Theme.text-primary; }
+            Divider { }
+
+            SettingRow {
+                icon: "restart"; title: "Continue where you left off";
+                subtitle: "Restore tabs from the previous session";
+                has-toggle: true; checked: root.startup-restore;
+                toggled(v) => { root.startup-restore-changed(v); }
+            }
+            SettingRow {
+                icon: "home"; title: "Homepage"; subtitle: "Opened by the home button";
+                value-text: root.homepage == "" ? "New tab page" : root.homepage;
+                clicked => { root.homepage-changed("prompt"); }
+            }
+        }
+
+        if root.section-index == 4: VerticalLayout {
+            spacing: 6px;
+
+            Text { text: "Downloads"; font-size: Theme.font-size-xxl; font-weight: 500; color: Theme.text-primary; }
+            Divider { }
+
+            SettingRow {
+                icon: "folder"; title: "Download location"; subtitle: root.profile-dir + "/downloads";
+                clicked => { root.open-download-folder(); }
+            }
+            FlatButton { text: "Open downloads panel"; clicked => { root.open-downloads-panel(); } }
+        }
+
+        if root.section-index == 5: VerticalLayout {
+            spacing: 6px;
+
+            Text { text: "Site permissions"; font-size: Theme.font-size-xxl; font-weight: 500; color: Theme.text-primary; }
+            Divider { }
+
+            Text {
+                text: "Engine v0.1 exposes no camera, microphone, location, notification, or clipboard APIs to sites — nothing can request them. Permissions below are stored per-site and enforced when those APIs ship.";
+                wrap: no-wrap;
+                overflow: elide;
+                font-size: Theme.font-size-s;
+                color: Theme.text-secondary;
+            }
+
+            for row in root.permissions: HorizontalLayout {
+                spacing: 12px;
+                height: 44px;
+
+                Text {
+                    text: row.site;
+                    font-size: Theme.font-size-m;
+                    color: Theme.text-primary;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                    overflow: elide;
+                }
+                Text {
+                    text: "camera " + row.camera + " · mic " + row.mic + " · location " + row.location
+                        + " · notifications " + row.notifications + " · clipboard " + row.clipboard
+                        + " · popups " + row.popups;
+                    font-size: Theme.font-size-s;
+                    color: Theme.text-secondary;
+                    vertical-alignment: center;
+                }
+                IconButton {
+                    icon: "delete";
+                    tooltip: "Reset site permissions";
+                    clicked => { root.permission-reset(row.site); }
+                }
+            }
+
+            FlatButton { text: "Reset all"; danger: true; clicked => { root.permission-reset-all(); } }
+        }
+
+        if root.section-index == 6: VerticalLayout {
+            spacing: 6px;
+
+            Text { text: "Advanced"; font-size: Theme.font-size-xxl; font-weight: 500; color: Theme.text-primary; }
+            Divider { }
+
+            SettingRow {
+                icon: "cookie"; title: "Cookies"; subtitle: "CHIPS-partitioned per top-level site";
+                value-text: root.cookie-policy;
+                clicked => {
+                    root.cookie-policy-changed(
+                        root.cookie-policy == "partitioned" ? "block-3p"
+                        : root.cookie-policy == "block-3p" ? "block-all" : "partitioned");
+                }
+            }
+            SettingRow {
+                icon: "delete"; title: "Clear cookies and site data on exit";
+                has-toggle: true; checked: root.clear-on-exit;
+                toggled(v) => { root.clear-on-exit-changed(v); }
+            }
+            SettingRow {
+                icon: "moon"; title: "Suspend background tabs after";
+                subtitle: "Frees the JS heap and DOM in one call";
+                value-text: root.suspend-secs + " s";
+                clicked => { root.suspend-secs-changed(root.suspend-secs >= 900 ? 60 : root.suspend-secs + 120); }
+            }
+            Divider { }
+            FlatButton { text: "Clear browsing data…"; danger: true; clicked => { root.clear-browsing-data(); } }
+            FlatButton { text: "Empty HTTP cache"; clicked => { root.clear-cache(); } }
+            FlatButton { text: "Delete all cookies"; danger: true; clicked => { root.clear-cookies(); } }
+        }
+
+        if root.section-index == 7: VerticalLayout {
+            spacing: 6px;
+
+            Text { text: "About"; font-size: Theme.font-size-xxl; font-weight: 500; color: Theme.text-primary; }
+            Divider { }
+            Text { text: "browse-wed " + root.version; font-size: Theme.font-size-l; color: Theme.text-primary; }
+            Text {
+                text: "Rust engine (QuickJS-ng · rustls · QUIC) with a native Slint interface. MPL-2.0 engine; UI crate under GPL-3.0 (Slint royalty-free desktop license available).";
+                wrap: no-wrap;
+                overflow: elide;
+                font-size: Theme.font-size-s;
+                color: Theme.text-secondary;
+            }
+            Text { text: "Profile: " + root.profile-dir; font-size: Theme.font-size-s; color: Theme.text-secondary; overflow: elide; }
+        }
+    }
+
+    in property <[PermissionRow]> permissions;
+    callback search-edited(string);
+    callback section-changed-index(int);
+    callback open-download-folder();
+    callback open-downloads-panel();
+    callback permission-reset(string);
+    callback permission-reset-all();
+}

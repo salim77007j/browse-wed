@@ -21,7 +21,7 @@
 #![forbid(unsafe_code)]
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 
 use bw_privacy::cname::{CnameChain, Uncloaker};
@@ -80,6 +80,10 @@ pub struct PolicyEngine {
     alt_svc: RwLock<HashMap<String, AltSvcEntry>>,
     https_upgrade: bool,
     hsts_enabled: bool,
+    /// Runtime kill-switch for the network filter pass (UI privacy toggle).
+    filters_enabled: AtomicBool,
+    /// Runtime kill-switch for Safe Browsing verdicts (UI privacy toggle).
+    safebrowsing_enabled: AtomicBool,
     stats: PolicyStatsInner,
 }
 
@@ -122,6 +126,8 @@ impl PolicyEngine {
             alt_svc: RwLock::new(HashMap::new()),
             https_upgrade: config.https_upgrade,
             hsts_enabled: config.hsts,
+            filters_enabled: AtomicBool::new(true),
+            safebrowsing_enabled: AtomicBool::new(true),
             stats: PolicyStatsInner::default(),
         }
     }
@@ -130,19 +136,22 @@ impl PolicyEngine {
     /// hits to warnings instead of silent blocks.
     pub fn check(&self, ctx: &RequestContext, is_top_level_navigation: bool) -> PolicyVerdict {
         self.stats.checked.fetch_add(1, Ordering::Relaxed);
-        match self.filters.decide(ctx) {
-            Decision::Block => {
-                self.stats.blocked.fetch_add(1, Ordering::Relaxed);
-                return PolicyVerdict::Block(BlockReason::NetworkFilter);
+        if self.filters_enabled.load(Ordering::Relaxed) {
+            match self.filters.decide(ctx) {
+                Decision::Block => {
+                    self.stats.blocked.fetch_add(1, Ordering::Relaxed);
+                    return PolicyVerdict::Block(BlockReason::NetworkFilter);
+                }
+                Decision::Neuter => {
+                    self.stats.neutered.fetch_add(1, Ordering::Relaxed);
+                    return PolicyVerdict::Neuter;
+                }
+                Decision::Allow => {}
             }
-            Decision::Neuter => {
-                self.stats.neutered.fetch_add(1, Ordering::Relaxed);
-                return PolicyVerdict::Neuter;
-            }
-            Decision::Allow => {}
         }
 
-        if let Verdict::Threat = self.safe_browsing.check(ctx.url.as_str()) {
+        let threat = self.safe_browsing.check(ctx.url.as_str());
+        if self.safebrowsing_enabled.load(Ordering::Relaxed) && threat == Verdict::Threat {
             self.stats.warned.fetch_add(1, Ordering::Relaxed);
             if is_top_level_navigation {
                 return PolicyVerdict::Warn(BlockReason::SafeBrowsing);
@@ -151,6 +160,16 @@ impl PolicyEngine {
             return PolicyVerdict::Block(BlockReason::SafeBrowsing);
         }
         PolicyVerdict::Allow
+    }
+
+    /// Runtime toggle for the network filter pass (privacy settings UI).
+    pub fn set_filters_enabled(&self, enabled: bool) {
+        self.filters_enabled.store(enabled, Ordering::Relaxed);
+    }
+
+    /// Runtime toggle for Safe Browsing verdicts.
+    pub fn set_safebrowsing_enabled(&self, enabled: bool) {
+        self.safebrowsing_enabled.store(enabled, Ordering::Relaxed);
     }
 
     /// Re-check a request against its *effective* host after CNAME

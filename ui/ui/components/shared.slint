@@ -1,0 +1,204 @@
+// Shared primitives: icon buttons, text buttons, pills, dividers.
+
+import { Theme } from "../theme.slint";
+import { Icon } from "icons.slint";
+
+export component IconButton inherits Rectangle {
+    /// Icon name (see icons.slint).
+    in property <string> icon;
+    /// Enabled state.
+    in property <bool> enabled: true;
+    /// Override color.
+    in property <color> icon-color: Theme.text-secondary;
+    in property <length> size: 32px;
+    in property <length> icon-size: 18px;
+    /// Tooltip text.
+    in property <string> tooltip;
+
+    callback clicked();
+
+    width: size;
+    height: size;
+    border-radius: size / 2;
+    background: ta.pressed && enabled ? Theme.control-active
+        : ta.has-hover && enabled ? Theme.control-hover : transparent;
+
+    ta := TouchArea {
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+        clicked => { if (root.enabled) { root.clicked(); } }
+    }
+
+    Icon {
+        icon: root.icon;
+        icon-color: root.enabled ? root.icon-color : Theme.text-disabled;
+        icon-size: root.icon-size;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+    }
+
+    if tooltip != "": Rectangle {
+        x: 0; y: parent.height + 6px;
+        width: tip.preferred-width + 16px;
+        height: 28px;
+        border-radius: 6px;
+        background: #000000e6;
+        opacity: ta.has-hover ? 1 : 0;
+
+        tip := Text {
+            x: 8px;
+            text: root.tooltip;
+            color: white;
+            font-size: Theme.font-size-s;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component FlatButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary: false;
+    in property <bool> danger: false;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    height: 34px;
+    horizontal-stretch: 0;
+    border-radius: Theme.radius-chip;
+    background: !enabled ? (Theme.dark ? #ffffff0f : #f1f3f4)
+        : primary ? Theme.accent
+        : danger ? Theme.danger
+        : ta.has-hover ? Theme.control-hover : Theme.pill-bg;
+
+    ta := TouchArea {
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+        clicked => { if (root.enabled) { root.clicked(); } }
+    }
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        alignment: center;
+
+        Text {
+            text: root.text;
+            vertical-alignment: center;
+            font-size: Theme.font-size-m;
+            font-weight: 500;
+            color: !root.enabled ? Theme.text-disabled
+                : root.primary ? Theme.text-on-accent
+                : root.danger ? Theme.danger
+                : Theme.text-primary;
+        }
+    }
+}
+
+export component Divider inherits Rectangle {
+    height: 1px;
+    background: Theme.divider;
+}
+
+export component Toggle inherits Rectangle {
+    in property <bool> checked: false;
+    callback toggled(bool);
+
+    width: 40px;
+    height: 22px;
+    border-radius: 11px;
+    background: root.checked ? Theme.accent : (Theme.dark ? #5f6368 : #bdc1c6);
+
+    ta := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.toggled(!root.checked); }
+    }
+
+    Rectangle {
+        width: 16px;
+        height: 16px;
+        y: 3px;
+        x: root.checked ? parent.width - 19px : 3px;
+        border-radius: 8px;
+        background: white;
+        animate x { duration: 120ms; easing: ease-in-out; }
+    }
+}
+
+export component SettingRow inherits Rectangle {
+    in property <string> icon;
+    in property <string> title;
+    in property <string> subtitle;
+    in property <bool> has-toggle: false;
+    in property <bool> checked: false;
+    in property <string> value-text: "";
+    callback toggled(bool);
+    callback clicked();
+
+    height: 64px;
+    background: ma.has-hover ? Theme.panel-item-hover : transparent;
+    border-radius: Theme.radius-chip;
+
+    ma := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { if (!root.has-toggle) { root.clicked(); } }
+    }
+
+    HorizontalLayout {
+        padding-left: Theme.space-m;
+        padding-right: Theme.space-l;
+        spacing: Theme.space-l;
+
+        if root.icon != "": Icon {
+            icon: root.icon;
+            icon-color: Theme.text-secondary;
+            icon-size: Theme.icon-size-lg;
+            y: (parent.height - self.height) / 2;
+        }
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+
+            Text {
+                text: root.title;
+                font-size: Theme.font-size-l;
+                color: Theme.text-primary;
+                overflow: elide;
+            }
+            if root.subtitle != "": Text {
+                text: root.subtitle;
+                font-size: Theme.font-size-s;
+                color: Theme.text-secondary;
+                overflow: elide;
+                wrap: no-wrap;
+            }
+        }
+
+        if root.value-text != "": Text {
+            text: root.value-text;
+            font-size: Theme.font-size-m;
+            color: Theme.text-secondary;
+            vertical-alignment: center;
+        }
+
+        if root.has-toggle: Toggle {
+            checked: root.checked;
+            toggled(v) => { root.toggled(v); }
+            y: (parent.height - self.height) / 2;
+        }
+    }
+}
+
+export component Spinner inherits Rectangle {
+    in property <color> spin-color: Theme.accent;
+    in property <length> spin-size: 16px;
+
+    width: spin-size;
+    height: spin-size;
+
+    Rectangle {
+        width: parent.width;
+        height: parent.height;
+        border-radius: self.width / 2;
+        border-width: 2px;
+        border-color: root.spin-color;
+    }
+}

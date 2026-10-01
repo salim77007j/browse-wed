@@ -1,0 +1,392 @@
+// Toolbar: nav cluster, pill omnibox with suggestions dropdown, action
+// cluster, main kebab menu.
+
+import { Theme } from "../theme.slint";
+import { Icon } from "icons.slint";
+import { IconButton, FlatButton, Divider } from "shared.slint";
+import { TabItem, SuggestionItem } from "../theme.slint";
+
+component MenuEntry inherits Rectangle {
+    in property <string> icon;
+    in property <string> text;
+    in property <string> shortcut;
+    in property <bool> danger: false;
+    callback clicked();
+
+    height: 36px;
+    background: ta.has-hover ? Theme.control-hover : transparent;
+    border-radius: 6px;
+
+    ta := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
+
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        spacing: 12px;
+
+        Icon {
+            icon: root.icon;
+            icon-color: root.danger ? Theme.danger : Theme.text-secondary;
+            icon-size: 17px;
+            y: (parent.height - self.height) / 2;
+        }
+        Text {
+            text: root.text;
+            font-size: Theme.font-size-m;
+            color: root.danger ? Theme.danger : Theme.text-primary;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+        Text {
+            text: root.shortcut;
+            font-size: Theme.font-size-s;
+            color: Theme.text-secondary;
+            vertical-alignment: center;
+        }
+    }
+}
+
+component SuggestionRow inherits Rectangle {
+    in property <SuggestionItem> item;
+    in property <int> selected;
+    in property <int> index;
+    callback picked(SuggestionItem);
+
+    height: 38px;
+    background: root.selected == root.index ? Theme.control-active
+        : ta.has-hover ? Theme.control-hover : transparent;
+
+    ta := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.picked(root.item); }
+    }
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        spacing: 12px;
+
+        Icon {
+            icon: root.item.kind == "search" ? "search"
+                : root.item.kind == "history" ? "history"
+                : root.item.kind == "bookmark" ? "star"
+                : "globe";
+            icon-color: Theme.text-secondary;
+            icon-size: 16px;
+            y: (parent.height - self.height) / 2;
+        }
+
+        Text {
+            text: root.item.text;
+            font-size: Theme.font-size-m;
+            color: Theme.text-primary;
+            vertical-alignment: center;
+            overflow: elide;
+            horizontal-stretch: 1;
+        }
+
+        if root.item.secondary != "": Text {
+            text: root.item.secondary;
+            font-size: Theme.font-size-s;
+            color: Theme.text-secondary;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+}
+
+export component Toolbar inherits Rectangle {
+    in property <int> focus-pulse: 0;
+    // --- state ---------------------------------------------------------------
+    in property <string> url-text;
+    in property <string> security: "secure";       // secure | info | insecure | local
+    in property <bool> can-go-back;
+    in property <bool> can-go-forward;
+    in property <bool> loading;
+    in property <float> progress;                   // 0..1 page load
+    in property <bool> bookmarked;
+    in property <[SuggestionItem]> suggestions;
+    in property <int> suggestion-selected;
+    in property <bool> suggestions-open;
+    in property <bool> adblock-active;
+    in property <int> blocked-session;
+
+    callback back();
+    callback forward();
+    callback reload();
+    callback stop();
+    callback home();
+    callback navigate-request(string);
+    callback bookmark-toggle();
+    callback open-bookmarks();
+    callback open-downloads();
+    callback open-history();
+    callback open-settings();
+    callback open-privacy();
+    callback open-devtools();
+    callback open-extensions();
+    callback open-menu(length, length);
+    callback print-page();
+    callback save-page();
+    callback find-open();
+    callback zoom-in();
+    callback zoom-out();
+    callback zoom-reset();
+    callback fullscreen-toggle();
+    callback suggestion-picked(SuggestionItem);
+    callback suggestion-hover(int);
+    callback omnibox-focused();
+    callback omnibox-blurred();
+
+    height: Theme.toolbar-height;
+    background: Theme.surface;
+
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 6px;
+        spacing: 4px;
+
+        IconButton {
+            icon: "back";
+            enabled: root.can-go-back;
+            tooltip: "Back (Alt+←)";
+            clicked => { root.back(); }
+        }
+        IconButton {
+            icon: "forward";
+            enabled: root.can-go-forward;
+            tooltip: "Forward (Alt+→)";
+            clicked => { root.forward(); }
+        }
+        IconButton {
+            icon: root.loading ? "close" : "reload";
+            tooltip: root.loading ? "Stop (Esc)" : "Reload (Ctrl+R)";
+            clicked => {
+                if (root.loading) { root.stop(); } else { root.reload(); }
+            }
+        }
+        IconButton {
+            icon: "home";
+            tooltip: "Home";
+            clicked => { root.home(); }
+        }
+
+        // --- omnibox ---------------------------------------------------------
+        Rectangle {
+            vertical-stretch: 1;
+            height: 32px;
+            y: (parent.height - self.height) / 2;
+            border-radius: Theme.radius-pill;
+            background: ob.has-focus ? Theme.pill-bg-focus : Theme.pill-bg;
+            border-width: ob.has-focus ? 1px : 0;
+            border-color: Theme.accent;
+            drop-shadow-blur: ob.has-focus ? 10px : 0;
+            drop-shadow-color: #1a73e833;
+            drop-shadow-offset-y: 1px;
+
+            ob := FocusScope {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: parent.height;
+
+                key-pressed(event) => {
+                    if (event.text == Key.Return) {
+                        if (root.suggestions-open && root.suggestion-selected >= 0
+                            && root.suggestion-selected < root.suggestions.length) {
+                            root.suggestion-picked(root.suggestions[root.suggestion-selected]);
+                        } else {
+                            root.navigate-request(field.text);
+                        }
+                        field.focus();
+                        return accept;
+                    }
+                    if (event.text == Key.Escape) {
+                        root.omnibox-blurred();
+                        return accept;
+                    }
+                    reject
+                }
+
+                key-released(event) => { reject }
+
+                field := TextInput {
+                    x: 46px;
+                    width: parent.width - 46px - 96px;
+                    height: parent.height;
+                    vertical-alignment: center;
+                    font-size: Theme.font-size-l;
+                    color: Theme.text-primary;
+                    text: root.url-text;
+                    single-line: true;
+                    // Typing drives suggestions from Rust through the
+                    // text-edited callback on the root.
+                    edited => { root.omnibox-edited(self.text); }
+                    accepted => { root.navigate-request(self.text); }
+                }
+
+                TouchArea {
+                    clicked => {
+                        field.focus();
+                        field.select-all();
+                        root.omnibox-focused();
+                    }
+                }
+            }
+
+            // security chip
+            Rectangle {
+                x: 8px;
+                width: 34px;
+                height: parent.height;
+
+                if root.security == "secure" || root.security == "local": Icon {
+                    icon: root.security == "local" ? "info" : "lock";
+                    icon-color: Theme.text-secondary;
+                    icon-size: 15px;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
+                if root.security == "insecure": Icon {
+                    icon: "warning";
+                    icon-color: Theme.insecure;
+                    icon-size: 15px;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
+            }
+
+            // right-side omnibox actions
+            HorizontalLayout {
+                x: parent.width - 92px;
+                width: 84px;
+                height: parent.height;
+                alignment: center;
+                spacing: 2px;
+
+                if root.adblock-active: IconButton {
+                    icon: "shield-check";
+                    icon-color: Theme.accent;
+                    size: 26px;
+                    icon-size: 15px;
+                    tooltip: "Ad & tracker blocking — " + root.blocked-session + " blocked this session";
+                    clicked => { root.open-privacy(); }
+                }
+                IconButton {
+                    icon: root.bookmarked ? "star" : "star-outline";
+                    icon-color: root.bookmarked ? #f9ab00 : Theme.text-secondary;
+                    size: 26px;
+                    icon-size: 15px;
+                    tooltip: "Bookmark (Ctrl+D)";
+                    clicked => { root.bookmark-toggle(); }
+                }
+            }
+
+            // load progress underline inside the pill
+            if root.loading && root.progress > 0: Rectangle {
+                x: 12px;
+                y: parent.height - 3px;
+                width: (parent.width - 24px) * Math.min(root.progress, 1);
+                height: 2.5px;
+                border-radius: 1.25px;
+                background: Theme.accent;
+            }
+        }
+
+        IconButton {
+            icon: "bookmarks";
+            tooltip: "Bookmarks (Ctrl+Shift+B)";
+            clicked => { root.open-bookmarks(); }
+        }
+        IconButton {
+            icon: "download";
+            tooltip: "Downloads (Ctrl+J)";
+            clicked => { root.open-downloads(); }
+        }
+        IconButton {
+            icon: "devtools";
+            tooltip: "Developer tools (F12)";
+            clicked => { root.open-devtools(); }
+        }
+        IconButton {
+            icon: "menu";
+            tooltip: "Menu (Alt+M)";
+            clicked => { root.open-menu(0px, 0px); }
+        }
+    }
+
+    // --- suggestions dropdown -------------------------------------------------
+    if root.suggestions-open: Rectangle {
+        x: 128px;
+        y: parent.height + 2px;
+        width: parent.width - 232px;
+        height: Math.min(38px * root.suggestions.length + 12px, 320px);
+        border-radius: Theme.radius-chip;
+        background: Theme.surface;
+        drop-shadow-blur: 18px;
+        drop-shadow-color: #0000004d;
+        drop-shadow-offset-y: 4px;
+        clip: true;
+
+        VerticalLayout {
+            padding: 6px;
+
+            for sugg[i] in root.suggestions: SuggestionRow {
+                item: sugg;
+                index: i;
+                selected: root.suggestion-selected;
+                picked(item) => { root.suggestion-picked(item); }
+            }
+        }
+    }
+
+    callback omnibox-edited(string);
+
+    // --- main kebab menu -------------------------------------------------------
+    if menu-open: Rectangle {
+        x: parent.width - 272px;
+        y: parent.height + 2px;
+        width: 264px;
+        height: 492px;
+        border-radius: Theme.radius-chip;
+        background: Theme.surface;
+        drop-shadow-blur: 18px;
+        drop-shadow-color: #0000004d;
+        drop-shadow-offset-y: 4px;
+        clip: true;
+
+        VerticalLayout {
+            padding: 6px;
+            spacing: 1px;
+
+            MenuEntry { icon: "plus"; text: "New tab"; shortcut: "Ctrl+T"; clicked => { root.new-tab(); root.menu-close(); } }
+            MenuEntry { icon: "tab-group"; text: "Reopen closed tab"; shortcut: "Ctrl+Shift+T"; clicked => { root.reopen-closed(); root.menu-close(); } }
+            Rectangle { height: 1px; background: Theme.divider; }
+            MenuEntry { icon: "find"; text: "Find in page…"; shortcut: "Ctrl+F"; clicked => { root.find-open(); root.menu-close(); } }
+            MenuEntry { icon: "zoom-in"; text: "Zoom in"; shortcut: "Ctrl++"; clicked => { root.zoom-in(); root.menu-close(); } }
+            MenuEntry { icon: "zoom-out"; text: "Zoom out"; shortcut: "Ctrl+-"; clicked => { root.zoom-out(); root.menu-close(); } }
+            MenuEntry { icon: "zoom-in"; text: "Reset zoom"; shortcut: "Ctrl+0"; clicked => { root.zoom-reset(); root.menu-close(); } }
+            MenuEntry { icon: "fullscreen"; text: "Fullscreen"; shortcut: "F11"; clicked => { root.fullscreen-toggle(); root.menu-close(); } }
+            Rectangle { height: 1px; background: Theme.divider; }
+            MenuEntry { icon: "print"; text: "Print / Save as PDF…"; shortcut: "Ctrl+P"; clicked => { root.print-page(); root.menu-close(); } }
+            MenuEntry { icon: "save"; text: "Save page as…"; shortcut: "Ctrl+S"; clicked => { root.save-page(); root.menu-close(); } }
+            Rectangle { height: 1px; background: Theme.divider; }
+            MenuEntry { icon: "history"; text: "History"; shortcut: "Ctrl+H"; clicked => { root.open-history(); root.menu-close(); } }
+            MenuEntry { icon: "bookmarks"; text: "Bookmarks"; shortcut: "Ctrl+Shift+O"; clicked => { root.open-bookmarks(); root.menu-close(); } }
+            MenuEntry { icon: "download"; text: "Downloads"; shortcut: "Ctrl+J"; clicked => { root.open-downloads(); root.menu-close(); } }
+            MenuEntry { icon: "extensions"; text: "Filter lists (extensions)"; clicked => { root.open-extensions(); root.menu-close(); } }
+            MenuEntry { icon: "privacy"; text: "Privacy dashboard"; clicked => { root.open-privacy(); root.menu-close(); } }
+            Rectangle { height: 1px; background: Theme.divider; }
+            MenuEntry { icon: "settings"; text: "Settings"; shortcut: "Ctrl+,"; clicked => { root.open-settings(); root.menu-close(); } }
+        }
+    }
+
+    in property <bool> menu-open: false;
+    in property <length> menu-x: 0;
+    callback menu-close();
+    callback new-tab();
+    callback reopen-closed();
+}

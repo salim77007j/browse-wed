@@ -1,0 +1,112 @@
+// Bookmarks bar: pinned speed-dial row with hover-open folders.
+
+import { Theme } from "../theme.slint";
+import { Icon } from "icons.slint";
+import { BookmarkItem } from "../theme.slint";
+
+component BookmarkChip inherits Rectangle {
+    in property <BookmarkItem> item;
+    callback picked(string);
+    callback right-click(int);
+
+    height: 26px;
+    width: Math.min(Math.max(lbl.preferred-width + 34px, 60px), 180px);
+    border-radius: 13px;
+    background: ta.has-hover ? Theme.control-hover : transparent;
+
+    ta := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.picked(root.item.url); }
+        pointer-event(e) => {
+            if (e.kind == PointerEventKind.down && e.button == PointerEventButton.right) {
+                root.right-click(root.item.id);
+            }
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 7px;
+
+        if root.item.favicon.width > 0: Image {
+            source: root.item.favicon;
+            width: 15px;
+            height: 15px;
+            image-fit: contain;
+            y: (parent.height - self.height) / 2;
+        }
+        if root.item.favicon.width <= 0: Icon {
+            icon: root.item.folder == "" ? "globe" : "folder";
+            icon-color: Theme.text-secondary;
+            icon-size: 14px;
+            y: (parent.height - self.height) / 2;
+        }
+
+        lbl := Text {
+            text: root.item.title == "" ? root.item.url : root.item.title;
+            font-size: Theme.font-size-m;
+            color: Theme.text-primary;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+}
+
+export component BookmarksBar inherits Rectangle {
+    in property <[BookmarkItem]> bookmarks;
+    in property <bool> visible-bar: true;
+
+    callback picked(string);
+    callback bookmark-right-click(int);
+    callback open-manager();
+    callback open-all();
+
+    height: visible-bar ? Theme.bookmarks-height : 0;
+    background: Theme.bookmarks-bg;
+
+    if visible-bar: Rectangle {
+        y: 0;
+        height: parent.height - 1px;
+        background: Theme.bookmarks-bg;
+
+        HorizontalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+            spacing: 2px;
+            alignment: start;
+
+            for bm in bookmarks: BookmarkChip {
+                item: bm;
+                picked(url) => { root.picked(url); }
+                right-click(id) => { root.bookmark-right-click(id); }
+            }
+
+            Rectangle {
+                width: 30px;
+                height: 26px;
+                border-radius: 13px;
+                background: ta.has-hover ? Theme.control-hover : transparent;
+
+                ta := TouchArea {
+                    mouse-cursor: MouseCursor.pointer;
+                    clicked => { root.open-manager(); }
+                }
+
+                Icon {
+                    icon: "chevron-right";
+                    icon-color: Theme.text-secondary;
+                    icon-size: 16px;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
+            }
+        }
+    }
+
+    if visible-bar: Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Theme.divider;
+    }
+}

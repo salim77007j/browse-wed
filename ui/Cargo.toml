@@ -1,0 +1,48 @@
+[package]
+name = "bw-ui"
+description = "browse-wed browser UI — Slint chrome over the bw engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "browse-wed"
+path = "src/main.rs"
+
+[dependencies]
+bw-api = { path = "../api" }
+bw-engine = { path = "../engine" }
+bw-render = { path = "../rendering" }
+bw-network = { path = "../networking" }
+bw-privacy = { path = "../privacy" }
+
+slint = { version = "1.18", features = ["renderer-software", "accessibility"] }
+
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+url = { workspace = true }
+tiny-skia = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+cosmic-text = "0.19"
+swash = { workspace = true }
+http = { workspace = true }
+png = "0.18"
+zune-jpeg = "0.5"
+flate2 = "1"
+sys-locale = "0.3"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true }
+
+[build-dependencies]
+slint-build = "1.18"
+
+[dev-dependencies]
+tempfile = { workspace = true }
+

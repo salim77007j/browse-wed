@@ -70,6 +70,10 @@ pub struct EngineOptions {
     pub background_suspend_secs: u64,
     /// Maximum tabs before the memory governor urges suspension.
     pub max_active_tabs: u64,
+    /// Extra network filter rules (uBlock syntax), compiled at startup —
+    /// the custom filter-list surface ("extensions") for API consumers.
+    #[serde(default)]
+    pub extra_network_filters: Vec<String>,
 }
 
 impl Default for EngineOptions {
@@ -80,6 +84,7 @@ impl Default for EngineOptions {
             doh_url: None,
             background_suspend_secs: 300,
             max_active_tabs: 16,
+            extra_network_filters: Vec::new(),
         }
     }
 }
@@ -137,6 +142,13 @@ pub enum Command {
         site: String,
         /// Script source.
         code: String,
+    },
+    /// The renderable page model for a tab (blocks, styled runs, links,
+    /// images) — the payload a UI paints. None-valued fields mean the tab
+    /// is suspended or holds no HTML page.
+    PageSnapshot {
+        /// Tab id.
+        tab: u64,
     },
 }
 
@@ -313,6 +325,15 @@ impl BrowserApi {
                     self.engine.exec_js(&site, &code).map_err(|e| ApiError::Js(e.to_string()))?;
                 Ok(serde_json::to_value(value).unwrap_or(serde_json::Value::Null))
             }
+            Command::PageSnapshot { tab } => {
+                let id = TabId(tab);
+                match self.engine.page_snapshot(id).await {
+                    Some(model) => {
+                        serde_json::to_value(model).map_err(|e| ApiError::Invalid(e.to_string()))
+                    }
+                    None => Err(ApiError::NoSuchTab(tab)),
+                }
+            }
         }
     }
 
@@ -381,6 +402,7 @@ fn build_config(options: &EngineOptions) -> Result<EngineConfig, ApiError> {
         max_active_tabs: options.max_active_tabs as usize,
         ..GovernorPolicy::default()
     };
+    config.network_filter_rules.extend(options.extra_network_filters.iter().cloned());
     Ok(config)
 }
 

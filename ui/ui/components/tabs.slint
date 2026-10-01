@@ -1,0 +1,298 @@
+// Tab strip: Chrome-style rounded-top tabs with pin / close / groups,
+// drag-to-reorder signaling, and a per-tab context menu (PopupWindow).
+
+import { Theme, TabItem } from "../theme.slint";
+import { Icon } from "icons.slint";
+import { IconButton } from "shared.slint";
+
+component MenuEntry inherits Rectangle {
+    in property <string> icon;
+    in property <string> text;
+    in property <bool> danger: false;
+    callback clicked();
+
+    height: 34px;
+    background: ta.has-hover ? Theme.control-hover : transparent;
+    border-radius: 6px;
+
+    ta := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 12px;
+
+        Icon {
+            icon: root.icon;
+            icon-color: root.danger ? Theme.danger : Theme.text-secondary;
+            icon-size: 16px;
+            y: (parent.height - self.height) / 2;
+        }
+        Text {
+            text: root.text;
+            font-size: Theme.font-size-m;
+            color: root.danger ? Theme.danger : Theme.text-primary;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component TabButton inherits Rectangle {
+    in property <int> tab-id;
+    in property <string> title;
+    in property <image> favicon;
+    in property <bool> active;
+    in property <bool> loading;
+    in property <bool> pinned;
+    in property <bool> suspended;
+    in property <color> group;        // transparent when ungrouped
+    in property <string> group-name;
+
+    callback close-tab(int);
+    callback activate(int);
+    callback pin-toggle(int);
+    callback suspend-toggle(int);
+    callback group-new(int);
+    callback duplicate(int);
+    callback close-others(int);
+    callback drag-beyond(int, int);
+
+    width: root.pinned
+        ? 42px
+        : Math.min(Math.max(root.title.character-count * 6.5px + 78px, 118px), 238px);
+    height: Theme.tab-height;
+
+    border-radius: Theme.radius-tab;
+    background: root.active ? Theme.surface
+        : ta.has-hover ? Theme.tab-hover : transparent;
+
+    ta := TouchArea {
+        property <length> press-x;
+        property <length> press-y;
+        property <bool> moved-enough: false;
+        property <bool> maybe-drag: false;
+
+        mouse-cursor: root.active ? MouseCursor.default : MouseCursor.pointer;
+
+        pointer-event(e) => {
+            if (e.kind == PointerEventKind.down) {
+                if (e.button == PointerEventButton.left) {
+                    self.maybe-drag = true;
+                    self.moved-enough = false;
+                    self.press-x = self.mouse-x;
+                    self.press-y = self.mouse-y;
+                } else if (e.button == PointerEventButton.right) {
+                    menu.show();
+                }
+            } else if (e.kind == PointerEventKind.up && e.button == PointerEventButton.left) {
+                if (!self.moved-enough) {
+                    root.activate(root.tab-id);
+                }
+                self.maybe-drag = false;
+            }
+        }
+
+        changed mouse-x => {
+            if (self.maybe-drag) {
+                if (Math.abs(self.mouse-x - self.press-x) > 8px
+                    || Math.abs(self.mouse-y - self.press-y) > 8px) {
+                    self.moved-enough = true;
+                }
+                // Drag past ~one tab width: swap with the neighbor (one
+                // swap per gesture — the model swap re-creates elements).
+                if (self.moved-enough && Math.abs(self.mouse-x - self.press-x) > 110px) {
+                    root.drag-beyond(root.tab-id, self.mouse-x > self.press-x ? 1 : -1);
+                    self.maybe-drag = false;
+                }
+            }
+        }
+    }
+
+    if root.group.alpha > 0: Rectangle {
+        x: 0;
+        width: 3px;
+        height: parent.height - 8px;
+        y: 4px;
+        background: root.group;
+        border-radius: 1.5px;
+    }
+
+    HorizontalLayout {
+        x: root.pinned ? 0 : 10px;
+        width: parent.width - (root.pinned ? 0 : 20px);
+        height: parent.height;
+        spacing: 7px;
+
+        if root.pinned: Icon {
+            icon: "pin";
+            icon-color: root.suspended ? Theme.text-disabled : Theme.text-secondary;
+            icon-size: 15px;
+            y: (parent.height - self.height) / 2;
+        }
+        if !root.pinned && root.loading: Rectangle {
+            width: 16px;
+            height: 16px;
+            y: (parent.height - self.height) / 2;
+            border-radius: 8px;
+            border-width: 2px;
+            border-color: Theme.accent;
+            opacity: 0.9;
+            animate opacity { duration: 700ms; iteration-count: -1; direction: alternate; }
+        }
+        if !root.pinned && !root.loading && root.favicon.width > 0: Image {
+            source: root.favicon;
+            width: 16px;
+            height: 16px;
+            image-fit: contain;
+            y: (parent.height - self.height) / 2;
+        }
+        if !root.pinned && !root.loading && root.favicon.width <= 0 && root.suspended: Icon {
+            icon: "moon";
+            icon-color: Theme.text-disabled;
+            icon-size: 15px;
+            y: (parent.height - self.height) / 2;
+        }
+        if !root.pinned && !root.loading && root.favicon.width <= 0 && !root.suspended: Rectangle {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            y: (parent.height - self.height) / 2;
+            background: root.active ? Theme.accent : Theme.divider;
+            opacity: 0.85;
+        }
+
+        if !root.pinned: ttl := Text {
+            text: root.title == "" ? "New Tab" : root.title;
+            font-size: Theme.font-size-m;
+            color: root.active ? Theme.text-primary
+                : root.suspended ? Theme.text-disabled : Theme.text-secondary;
+            vertical-alignment: center;
+            overflow: elide;
+            horizontal-stretch: 1;
+        }
+
+        if !root.pinned && !root.suspended && ta.has-hover: IconButton {
+            icon: "close";
+            size: 24px;
+            icon-size: 14px;
+            icon-color: Theme.text-secondary;
+            y: (parent.height - self.height) / 2;
+            clicked => { root.close-tab(root.tab-id); }
+        }
+
+        if !root.pinned && root.suspended: IconButton {
+            icon: "restart";
+            size: 24px;
+            icon-size: 14px;
+            icon-color: Theme.text-secondary;
+            y: (parent.height - self.height) / 2;
+            clicked => { root.activate(root.tab-id); }
+        }
+    }
+
+    menu := PopupWindow {
+        x: 0;
+        y: parent.height + 2px;
+        width: 224px;
+        height: 288px;
+
+        Rectangle {
+            border-radius: Theme.radius-chip;
+            background: Theme.surface;
+            drop-shadow-blur: 16px;
+            drop-shadow-color: #00000040;
+            drop-shadow-offset-y: 3px;
+            clip: true;
+
+            VerticalLayout {
+                padding: 6px;
+                spacing: 1px;
+
+                MenuEntry {
+                    icon: "reload"; text: "Reload";
+                    clicked => { root.activate(root.tab-id); menu.close(); }
+                }
+                MenuEntry {
+                    icon: "pin"; text: root.pinned ? "Unpin tab" : "Pin tab";
+                    clicked => { root.pin-toggle(root.tab-id); menu.close(); }
+                }
+                MenuEntry {
+                    icon: "moon"; text: root.suspended ? "Wake tab" : "Suspend tab";
+                    clicked => { root.suspend-toggle(root.tab-id); menu.close(); }
+                }
+                MenuEntry {
+                    icon: "tab-group"; text: root.group.alpha > 0 ? "Remove from group" : "Add to new group…";
+                    clicked => { root.group-new(root.tab-id); menu.close(); }
+                }
+                Rectangle { height: 1px; background: Theme.divider; }
+                MenuEntry {
+                    icon: "copy"; text: "Duplicate";
+                    clicked => { root.duplicate(root.tab-id); menu.close(); }
+                }
+                Rectangle { height: 1px; background: Theme.divider; }
+                MenuEntry {
+                    icon: "close"; text: "Close tab"; danger: true;
+                    clicked => { root.close-tab(root.tab-id); menu.close(); }
+                }
+                MenuEntry {
+                    icon: "menu"; text: "Close other tabs"; danger: true;
+                    clicked => { root.close-others(root.tab-id); menu.close(); }
+                }
+            }
+        }
+    }
+}
+
+export component TabStrip inherits Rectangle {
+    in property <[TabItem]> tabs;
+
+    callback new-tab();
+    callback close-tab(int);
+    callback activate(int);
+    callback pin-toggle(int);
+    callback suspend-toggle(int);
+    callback group-new(int);
+    callback duplicate(int);
+    callback close-others(int);
+    callback drag-beyond(int, int);
+
+    height: Theme.tab-height + 6px;
+    background: Theme.strip-bg;
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-top: 6px;
+        spacing: 2px;
+
+        for tab[i] in tabs: TabButton {
+            tab-id: tab.id;
+            title: tab.title;
+            favicon: tab.favicon;
+            active: tab.active;
+            loading: tab.loading;
+            pinned: tab.pinned;
+            suspended: tab.suspended;
+            group: tab.group;
+
+            activate(id) => { root.activate(id); }
+            close-tab(id) => { root.close-tab(id); }
+            pin-toggle(id) => { root.pin-toggle(id); }
+            suspend-toggle(id) => { root.suspend-toggle(id); }
+            group-new(id) => { root.group-new(id); }
+            duplicate(id) => { root.duplicate(id); }
+            close-others(id) => { root.close-others(id); }
+            drag-beyond(id, dir) => { root.drag-beyond(id, dir); }
+        }
+
+        IconButton {
+            icon: "plus";
+            tooltip: "New tab (Ctrl+T)";
+            size: 30px;
+            y: 2px;
+            clicked => { root.new-tab(); }
+        }
+    }
+}

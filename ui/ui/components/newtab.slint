@@ -1,0 +1,250 @@
+// New tab / start page: search-first hero + speed dial (top sites),
+// privacy glance, and restore hint — clean 2026 layout per design ref.
+
+import { Theme } from "../theme.slint";
+import { Icon } from "icons.slint";
+import { SpeedDialItem } from "../theme.slint";
+
+component StatChip inherits Rectangle {
+    in property <string> label;
+    in property <int> value;
+
+    height: 64px;
+    border-radius: Theme.radius-card;
+    background: Theme.dark ? #ffffff08 : #00000005;
+    horizontal-stretch: 1;
+
+    VerticalLayout {
+        alignment: center;
+        spacing: 3px;
+
+        Text {
+            text: root.value;
+            font-size: Theme.font-size-xl;
+            font-weight: 600;
+            color: Theme.text-primary;
+            horizontal-alignment: center;
+        }
+        Text {
+            text: root.label;
+            font-size: Theme.font-size-xs;
+            color: Theme.text-secondary;
+            horizontal-alignment: center;
+        }
+    }
+}
+
+export component NewTabView inherits Rectangle {
+    in property <string> search-engine-name: "DuckDuckGo";
+    in property <[SpeedDialItem]> dial;
+    in property <int> trackers-blocked;
+    in property <int> ads-blocked;
+    in property <int> tabs-open;
+    in property <int> memory-mb;
+    in property <bool> session-restore-available;
+    in property <color> page-background;
+
+    callback search-submitted(string);
+    callback dial-picked(string);
+    callback restore-session();
+
+    background: page-background;
+
+    Flickable {
+        width: 100%;
+        height: 100%;
+        content-width: root.width;
+        content-height: root.height + 40px;
+
+        VerticalLayout {
+            width: Math.min(root.width, 760px);
+            x: (root.width - self.width) / 2;
+            y: 48px;
+            spacing: 28px;
+            alignment: start;
+
+            // brand
+            HorizontalLayout {
+                alignment: center;
+                spacing: 10px;
+
+                Rectangle {
+                    width: 34px;
+                    height: 34px;
+                    border-radius: 10px;
+                    background: Theme.accent;
+                    Icon {
+                        icon: "privacy";
+                        icon-color: white;
+                        icon-size: 22px;
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+                Text {
+                    text: "browse-wed";
+                    font-size: Theme.font-size-xxl;
+                    font-weight: 600;
+                    color: Theme.text-primary;
+                    vertical-alignment: center;
+                }
+            }
+
+            // search pill
+            Rectangle {
+                height: 48px;
+                border-radius: 24px;
+                background: Theme.pill-bg;
+                border-width: ta.has-hover || qif.has-focus ? 1px : 0;
+                border-color: Theme.divider;
+
+                qif := FocusScope {
+                    x: 0; y: 0; width: 100%; height: 100%;
+
+                    key-pressed(event) => {
+                        if (event.text == Key.Return) {
+                            root.search-submitted(qin.text);
+                            return accept;
+                        }
+                        reject
+                    }
+
+                    qin := TextInput {
+                        x: 56px;
+                        width: parent.width - 72px;
+                        height: parent.height;
+                        vertical-alignment: center;
+                        font-size: Theme.font-size-xl;
+                        color: Theme.text-primary;
+                        single-line: true;
+                    }
+                }
+
+                Icon {
+                    icon: "search";
+                    icon-color: Theme.text-secondary;
+                    icon-size: 20px;
+                    x: 18px;
+                    y: (parent.height - self.height) / 2;
+                }
+
+                ta := TouchArea {
+                    clicked => { qin.focus(); }
+                }
+            }
+
+            if root.session-restore-available: Rectangle {
+                height: 40px;
+                border-radius: 20px;
+                background: Theme.panel-item-active;
+                HorizontalLayout {
+                    padding-left: 16px;
+                    padding-right: 10px;
+                    spacing: 10px;
+                    Icon { icon: "restart"; icon-color: Theme.panel-item-active-text; icon-size: 16px; y: (parent.height - self.height) / 2; }
+                    Text {
+                        text: "Restore previous session";
+                        color: Theme.panel-item-active-text;
+                        vertical-alignment: center;
+                        font-size: Theme.font-size-m;
+                        horizontal-stretch: 1;
+                    }
+                    Rectangle {
+                        width: 70px;
+                        height: 28px;
+                        border-radius: 14px;
+                        background: Theme.accent;
+                        y: 6px;
+                        Text {
+                            text: "Restore";
+                            color: white;
+                            font-size: Theme.font-size-s;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                        ta2 := TouchArea {
+                            mouse-cursor: MouseCursor.pointer;
+                            clicked => { root.restore-session(); }
+                        }
+                    }
+                }
+            }
+
+            // speed dial
+            if root.dial.length > 0: VerticalLayout {
+                spacing: 14px;
+
+                Text {
+                    text: "Frequent sites";
+                    font-size: Theme.font-size-s;
+                    color: Theme.text-secondary;
+                    letter-spacing: 0.8px;
+                }
+
+                GridLayout {
+                    spacing: 14px;
+
+                    for dial-item[i] in root.dial: Rectangle {
+                        height: 108px;
+                        border-radius: Theme.radius-card;
+                        background: dia.has-hover
+                            ? (Theme.dark ? #ffffff12 : #0000000a)
+                            : (Theme.dark ? #ffffff08 : #00000005);
+
+                        dia := TouchArea {
+                            mouse-cursor: MouseCursor.pointer;
+                            clicked => { root.dial-picked(dial-item.url); }
+                        }
+
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 10px;
+
+                            Rectangle {
+                                width: 44px;
+                                height: 44px;
+                                border-radius: 14px;
+                                background: dial-item.bg;
+
+                                if dial-item.favicon.width > 0: Image {
+                                    source: dial-item.favicon;
+                                    width: 26px;
+                                    height: 26px;
+                                    image-fit: contain;
+                                    x: (parent.width - self.width) / 2;
+                                    y: (parent.height - self.height) / 2;
+                                }
+                                if dial-item.favicon.width <= 0: Text {
+                                    text: dial-item.title;
+                                    color: white;
+                                    font-size: Theme.font-size-xl;
+                                    font-weight: 600;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+
+                            Text {
+                                text: dial-item.title;
+                                font-size: Theme.font-size-m;
+                                color: Theme.text-primary;
+                                horizontal-alignment: center;
+                                overflow: elide;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // privacy glance
+            HorizontalLayout {
+                spacing: 12px;
+
+                StatChip { label: "trackers blocked"; value: root.trackers-blocked; }
+                StatChip { label: "ads blocked"; value: root.ads-blocked; }
+                StatChip { label: "tabs open"; value: root.tabs-open; }
+                StatChip { label: "memory (MB)"; value: root.memory-mb; }
+            }
+        }
+    }
+}

@@ -1,0 +1,165 @@
+// browse-wed design system — tokens from the user's design references
+// (wed44: new-tab layout, wed45: settings layout) with a light/dark/
+// system trio plus a custom accent.
+
+export global Theme {
+    // --- mode ------------------------------------------------------------
+    in-out property <bool> dark: false;
+    in-out property <color> accent: #1a73e8;
+
+    // --- chrome surfaces ---------------------------------------------------
+    // Tab strip background (reference: #DEE1E6).
+    in-out property <color> strip-bg: dark ? #202124 : #dee1e6;
+    // Active tab + toolbar surface.
+    in-out property <color> surface: dark ? #292a2d : #ffffff;
+    // Bookmarks bar (reference: #F8F9FA).
+    in-out property <color> bookmarks-bg: dark ? #232326 : #f8f9fa;
+    // Inactive tab hover fill.
+    in-out property <color> tab-hover: dark ? #ffffff14 : #0000000d;
+    // Content/page background.
+    in-out property <color> page-bg: dark ? #1b1b1f : #ffffff;
+
+    // --- text ---------------------------------------------------------------
+    in-out property <color> text-primary: dark ? #e8eaed : #202124;
+    in-out property <color> text-secondary: dark ? #9aa0a6 : #5f6368;
+    in-out property <color> text-disabled: dark ? #5f6368 : #bdc1c6;
+    in-out property <color> text-on-accent: #ffffff;
+
+    // --- controls -------------------------------------------------------------
+    in-out property <color> pill-bg: dark ? #3c4043 : #f1f3f4;
+    in-out property <color> pill-bg-focus: dark ? #2d2e31 : #ffffff;
+    in-out property <color> control-hover: dark ? #ffffff1a : #0000000f;
+    in-out property <color> control-active: dark ? #ffffff26 : #0000001a;
+    in-out property <color> divider: dark ? #3c4043 : #dadce0;
+    in-out property <color> input-bg: dark ? #202124 : #ffffff;
+
+    // --- semantic -----------------------------------------------------------
+    in-out property <color> danger: #d93025;
+    in-out property <color> success: #1e8e3e;
+    in-out property <color> warning: #f9ab00;
+    in-out property <color> secure: #1e8e3e;
+    in-out property <color> insecure: #d93025;
+
+    // --- panels (settings-style, reference wed45) ------------------------------
+    in-out property <color> panel-item-hover: dark ? #ffffff12 : #f1f3f4;
+    in-out property <color> panel-item-active: dark ? #8ab4f82e : #e8f0fe;
+    in-out property <color> panel-item-active-text: dark ? #8ab4f8 : #1967d2;
+
+    // --- geometry -------------------------------------------------------------
+    in-out property <length> radius-pill: 24px;
+    in-out property <length> radius-tab: 10px;
+    in-out property <length> radius-card: 12px;
+    in-out property <length> radius-chip: 8px;
+
+    in-out property <length> tab-height: 34px;
+    in-out property <length> toolbar-height: 44px;
+    in-out property <length> bookmarks-height: 32px;
+
+    in-out property <length> icon-size: 18px;
+    in-out property <length> icon-size-lg: 20px;
+
+    in-out property <length> space-xs: 4px;
+    in-out property <length> space-s: 8px;
+    in-out property <length> space-m: 12px;
+    in-out property <length> space-l: 16px;
+    in-out property <length> space-xl: 24px;
+
+    in-out property <length> font-size-xs: 11px;
+    in-out property <length> font-size-s: 12px;
+    in-out property <length> font-size-m: 13px;
+    in-out property <length> font-size-l: 15px;
+    in-out property <length> font-size-xl: 18px;
+    in-out property <length> font-size-xxl: 22px;
+
+    /// Human-readable byte sizes.
+    public pure function format-bytes(n: int) -> string {
+        if (n >= 1073741824) { return (n / 1073741824) + "." + (Math.mod(n, 1073741824) / 1073741824) + " GB"; }
+        if (n >= 1048576) { return (n / 1048576) + "." + (Math.mod(n, 1048576) / 1048576) + " MB"; }
+        if (n >= 1024) { return (n / 1024) + " KB"; }
+        return n + " B";
+    }
+}
+
+export struct TabItem {
+    id: int,
+    title: string,
+    url: string,
+    favicon: image,
+    active: bool,
+    loading: bool,
+    pinned: bool,
+    suspended: bool,
+    blocked: int,
+    group: color,         // group color (transparent when ungrouped)
+    audio: bool,
+}
+
+export struct BookmarkItem {
+    id: int,
+    title: string,
+    url: string,
+    favicon: image,
+    folder: string,
+    pinned: bool,
+}
+
+export struct HistoryItem {
+    id: int,
+    title: string,
+    url: string,
+    visited: string,
+    favicon: image,
+}
+
+export struct DownloadItem {
+    id: int,
+    filename: string,
+    url: string,
+    progress: float,      // 0..1, 2 = indeterminate, >=3 done, 4 failed
+    total-bytes: int,
+    received-bytes: int,
+    paused: bool,
+    speed: string,
+    icon: string,
+}
+
+export struct SuggestionItem {
+    kind: string,         // "search" | "url" | "history" | "bookmark"
+    text: string,
+    secondary: string,
+}
+
+export struct SettingsItem {
+    section: string,
+    icon: string,
+}
+
+export struct FilterRow {
+    id: int,
+    rule: string,
+    hits: int,
+    enabled: bool,
+}
+
+export struct DevtoolsLog {
+    level: string,        // "log" | "warn" | "error" | "result" | "info"
+    text: string,
+    at: string,
+}
+
+export struct PermissionRow {
+    site: string,
+    camera: string,       // "allow" | "block" | "ask"
+    mic: string,
+    location: string,
+    notifications: string,
+    clipboard: string,
+    popups: string,
+}
+
+export struct SpeedDialItem {
+    title: string,
+    url: string,
+    favicon: image,
+    bg: color,
+}

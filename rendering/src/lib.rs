@@ -36,10 +36,12 @@ pub mod css;
 pub mod dom;
 pub mod fonts;
 pub mod html_tokenizer;
+pub mod page_model;
 pub mod tree_builder;
 
 pub use css::{cascade, parse_color, parse_stylesheet, ComputedStyle, Stylesheet};
 pub use dom::{Document, ElementData, Node, NodeId, NodeKind};
 pub use fonts::{FontKey, FontSystem, RasterGlyph, ScaledMetrics};
 pub use html_tokenizer::{tokenize, Token};
+pub use page_model::{extract_page_model, Align, Block, PageModel, Run, RunStyle, TableCell};
 pub use tree_builder::{build_tree, parse_html};
