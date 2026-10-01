@@ -29,7 +29,7 @@ pub mod localstorage;
 
 use std::path::{Path, PathBuf};
 
-use redb::{ReadableDatabase, ReadableTable};
+use redb::ReadableTable;
 use thiserror::Error;
 
 /// Storage-layer errors.

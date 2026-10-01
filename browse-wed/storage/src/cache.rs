@@ -109,7 +109,7 @@ impl HttpCache {
     pub fn key_for(url: &str, vary_hash: Option<u64>) -> String {
         let mut h = Sha256::new();
         h.update(url.as_bytes());
-        let mut key: String = hex(&h.finalize());
+        let mut key: String = hex(h.finalize());
         if let Some(v) = vary_hash {
             key.push('.');
             key.push_str(&format!("{v:016x}"));

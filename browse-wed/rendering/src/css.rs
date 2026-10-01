@@ -86,7 +86,7 @@ struct Selector {
 }
 
 /// Specificity tuple (inline styles count as highest).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Specificity {
     /// id selectors
     pub ids: u32,
@@ -94,12 +94,6 @@ pub struct Specificity {
     pub classes: u32,
     /// type selectors
     pub types: u32,
-}
-
-impl Default for Specificity {
-    fn default() -> Self {
-        Specificity { ids: 0, classes: 0, types: 0 }
-    }
 }
 
 impl Specificity {
@@ -119,7 +113,7 @@ pub struct Rule {
     selectors: Vec<Selector>,
     /// Declarations.
     pub decls: Vec<(String, Vec<Value>)>,
-    /// Max specificity across its selectors.
+    /// Summed specificity across its selectors (groups never under-rank).
     pub specificity: Specificity,
     /// Source order (later wins at equal specificity).
     pub order: u32,
@@ -245,8 +239,8 @@ impl Default for ComputedStyle {
             width: None,
             height: None,
             min_height: Value::Px(0.0),
-            margin: [Value::Px(0.0); 4],
-            padding: [Value::Px(0.0); 4],
+            margin: [Value::Px(0.0), Value::Px(0.0), Value::Px(0.0), Value::Px(0.0)],
+            padding: [Value::Px(0.0), Value::Px(0.0), Value::Px(0.0), Value::Px(0.0)],
             border: [0.0; 4],
             border_color: [0, 0, 0, 255],
             font_family: vec!["sans-serif".to_string()],
@@ -319,10 +313,15 @@ pub fn parse_stylesheet(css: &str) -> Stylesheet {
             continue;
         }
         let decls = parse_declarations(body);
+        // A selector group acts as a single rule; we store the *summed*
+        // specificity across its selectors — a conservative over-approximation
+        // that guarantees the group never under-ranks any of its members.
         let mut specificity = Specificity::default();
         for sel in &parsed_sels {
             let s = sel.specificity();
-            specificity = specificity.max(s);
+            specificity.ids += s.ids;
+            specificity.classes += s.classes;
+            specificity.types += s.types;
         }
         sheet.rules.push(Rule {
             selectors: parsed_sels,
@@ -340,8 +339,7 @@ fn split_rules(css: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut depth = 0i32;
     let mut cur = String::new();
-    let mut chars = css.chars().peekable();
-    while let Some(c) = chars.next() {
+    for c in css.chars() {
         match c {
             '{' => {
                 depth += 1;
@@ -375,13 +373,13 @@ fn parse_selector(input: &str) -> Option<Selector> {
     for compound in input.split_whitespace() {
         let mut simples = Vec::new();
         let mut part = String::new();
-        let mut flush = |part: &mut String, simples: &mut Vec<Simple>| {
+        let flush = |part: &mut String, simples: &mut Vec<Simple>| {
             if part.is_empty() {
                 return;
             }
             let mut cur = String::new();
             let mut kind = 0u8; // 0 type, 1 id, 2 class
-            let mut push = |cur: &str, kind: u8, out: &mut Vec<Simple>| {
+            let push = |cur: &str, kind: u8, out: &mut Vec<Simple>| {
                 if cur.is_empty() {
                     return;
                 }
@@ -626,7 +624,7 @@ pub fn parse_color(tok: &str) -> Option<Color> {
                 r.clamp(0.0, 255.0) as u8,
                 g.clamp(0.0, 255.0) as u8,
                 b.clamp(0.0, 255.0) as u8,
-                (a.clamp(0.0, 1.0) * 255.0) as u8,
+                (a.clamp(0.0, 1.0) * 255.0).round() as u8,
             ]);
         }
         return None;
@@ -634,6 +632,7 @@ pub fn parse_color(tok: &str) -> Option<Color> {
     named("black", [0, 0, 0, 255])
         .or_else(|| named("white", [255, 255, 255, 255]))
         .or_else(|| named("red", [255, 0, 0, 255]))
+        .or_else(|| named("lime", [0, 255, 0, 255]))
         .or_else(|| named("green", [0, 128, 0, 255]))
         .or_else(|| named("blue", [0, 0, 255, 255]))
         .or_else(|| named("yellow", [255, 255, 0, 255]))
@@ -724,19 +723,14 @@ fn compute_subtree(
 }
 
 fn apply_tag_defaults(style: &mut ComputedStyle, el: &ElementData) {
+    // Pass 1: display category.
+    if is_block_tag(&el.tag) {
+        style.display = Display::Block;
+    }
+    // Pass 2: tag-specific typography / box style.
     match el.tag.as_str() {
         "html" | "body" => {
-            style.display = Display::Block;
             style.margin = [Value::Px(8.0), Value::Px(8.0), Value::Px(8.0), Value::Px(8.0)];
-        }
-        "div" | "section" | "article" | "header" | "footer" | "nav" | "main" | "aside"
-        | "figure" | "figcaption" | "blockquote" | "pre" | "form" | "fieldset" | "address"
-        | "details" | "summary" | "dialog" => {
-            style.display = Display::Block;
-        }
-        "p" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "ul" | "ol" | "li" | "dl" | "dt" | "dd"
-        | "table" | "thead" | "tbody" | "tfoot" | "tr" | "td" | "th" | "caption" => {
-            style.display = Display::Block;
         }
         "h1" => {
             style.font_size = 32.0;
@@ -826,7 +820,6 @@ fn apply_tag_defaults(style: &mut ComputedStyle, el: &ElementData) {
             ];
         }
         "hr" => {
-            style.display = Display::Block;
             style.border = [1.0, 0.0, 0.0, 0.0];
             style.border_color = [0, 0, 0, 255];
             style.margin = [
@@ -847,6 +840,55 @@ fn apply_tag_defaults(style: &mut ComputedStyle, el: &ElementData) {
         }
         _ => {}
     }
+}
+
+/// Tags that default to block-level display.
+fn is_block_tag(tag: &str) -> bool {
+    matches!(
+        tag,
+        "html"
+            | "body"
+            | "div"
+            | "section"
+            | "article"
+            | "header"
+            | "footer"
+            | "nav"
+            | "main"
+            | "aside"
+            | "figure"
+            | "figcaption"
+            | "blockquote"
+            | "pre"
+            | "form"
+            | "fieldset"
+            | "address"
+            | "details"
+            | "summary"
+            | "dialog"
+            | "p"
+            | "h1"
+            | "h2"
+            | "h3"
+            | "h4"
+            | "h5"
+            | "h6"
+            | "ul"
+            | "ol"
+            | "li"
+            | "dl"
+            | "dt"
+            | "dd"
+            | "table"
+            | "thead"
+            | "tbody"
+            | "tfoot"
+            | "tr"
+            | "td"
+            | "th"
+            | "caption"
+            | "hr"
+    )
 }
 
 fn apply_declarations(style: &mut ComputedStyle, decls: &[(String, Vec<Value>)], parent: &ComputedStyle) {
@@ -904,9 +946,9 @@ fn apply_declarations(style: &mut ComputedStyle, decls: &[(String, Vec<Value>)],
                 // `border: 1px solid black`
                 for v in values {
                     if let Value::Px(p) = v {
-                        style.border = [p; 4];
+                        style.border = [*p; 4];
                     } else if let Value::Color(c) = v {
-                        style.border_color = c;
+                        style.border_color = *c;
                     }
                 }
                 if let Some(Value::Keyword(k)) = first {
@@ -984,11 +1026,7 @@ fn apply_declarations(style: &mut ComputedStyle, decls: &[(String, Vec<Value>)],
             "line-height" => match first {
                 Some(Value::Px(p)) => style.line_height = Some(p / 16.0),
                 Some(Value::Percent(p)) => style.line_height = Some(p / 100.0),
-                Some(Value::Keyword(k)) => {
-                    if k == "normal" {
-                        style.line_height = None;
-                    }
-                }
+                Some(Value::Keyword(k)) if k == "normal" => style.line_height = None,
                 _ => {}
             },
             "flex-direction" => {

@@ -59,6 +59,10 @@ pub fn build_tree(tokens: Vec<Token>) -> Document {
 
     let mut stack: Vec<NodeId> = vec![head];
     let mut mode = Mode::Head;
+    // True while inserting the raw-text content of <script>/<style>/<title>/
+    // <textarea>: character data belongs to the current node whatever the
+    // surrounding insertion mode is.
+    let mut in_raw_text = false;
 
     for tok in tokens {
         match tok {
@@ -72,12 +76,18 @@ pub fn build_tree(tokens: Vec<Token>) -> Document {
                 if t.is_empty() {
                     continue;
                 }
-                // Whitespace-only text is dropped in head, kept in body.
-                if mode == Mode::Head && t.trim().is_empty() {
-                    continue;
+                if !in_raw_text && mode == Mode::Head {
+                    // Whitespace-only text is dropped in head, kept in body.
+                    if t.trim().is_empty() {
+                        continue;
+                    }
+                    // Non-whitespace text before <body> switches to body mode
+                    // (WHATWG "in head" character rule).
+                    mode = Mode::Body;
+                    stack = vec![body];
                 }
                 let parent = *stack.last().unwrap_or(&body);
-                doc.append_new(parent, NodeKind::Text(t));
+                doc.append_new(parent, NodeKind::Text(t.to_string()));
             }
             Token::StartTag { name, attrs, self_closing } => {
                 // Structural tags reuse the implicit nodes.
@@ -118,6 +128,9 @@ pub fn build_tree(tokens: Vec<Token>) -> Document {
                 );
                 let is_void = VOID_ELEMENTS.contains(&name.as_str());
                 if !is_void && !self_closing {
+                    if is_raw_text_element(&name) {
+                        in_raw_text = true;
+                    }
                     stack.push(node);
                 }
             }
@@ -128,7 +141,12 @@ pub fn build_tree(tokens: Vec<Token>) -> Document {
                     stack = vec![body];
                 }
                 "body" => {}
-                _ => close_element(&mut stack, &doc, &name),
+                _ => {
+                    if is_raw_text_element(&name) {
+                        in_raw_text = false;
+                    }
+                    close_element(&mut stack, &doc, &name);
+                }
             },
         }
     }
@@ -146,6 +164,11 @@ fn is_head_tag(tag: &str) -> bool {
         tag,
         "title" | "meta" | "link" | "style" | "script" | "base" | "noscript" | "template"
     )
+}
+
+/// Elements whose content is raw text (tokenizer never tags inside them).
+fn is_raw_text_element(tag: &str) -> bool {
+    matches!(tag, "script" | "style" | "title" | "textarea")
 }
 
 /// Implicit `</p>`: a block-level start tag closes an open `<p>`.
@@ -175,9 +198,7 @@ fn close_element(stack: &mut Vec<NodeId>, doc: &Document, name: &str) {
             .iter()
             .skip(1)
             .any(|&n| SCOPE_ELEMENTS.contains(&doc.tag_of(n).unwrap_or("")));
-        if !boundary {
-            stack.truncate(pos);
-        } else if pos + 1 == stack.len() {
+        if !boundary || pos + 1 == stack.len() {
             stack.truncate(pos);
         }
     }

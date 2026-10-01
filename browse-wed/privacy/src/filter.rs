@@ -232,11 +232,11 @@ impl NetworkFilter {
         match &self.pattern {
             Pattern::Any => true,
             Pattern::Substring(s) => url_lower.contains(s.as_str()),
-            Pattern::Regex(re) => re.is_match(&ctx.url.as_str()),
+            Pattern::Regex(re) => re.is_match(ctx.url.as_str()),
             // Hostname / HostPath are gated by the bucket lookup in
             // FilterSet::decide; when reached directly we verify the tail.
             Pattern::Hostname(h) => host_matches(ctx.target_host(), h),
-            Pattern::HostPath(h, re) => host_matches(ctx.target_host(), h) && re.is_match(&ctx.url.as_str()),
+            Pattern::HostPath(h, re) => host_matches(ctx.target_host(), h) && re.is_match(ctx.url.as_str()),
         }
     }
 }

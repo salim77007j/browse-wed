@@ -81,8 +81,12 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                     }
                 }
                 // Track raw-text elements: swallow content until the closer.
-                if let Some(Token::StartTag { name, .. }) = out.last() {
-                    if is_raw_text(name) {
+                let raw_name = out.last().and_then(|t| match t {
+                    Token::StartTag { name, .. } => Some(name.clone()),
+                    _ => None,
+                });
+                if let Some(name) = raw_name {
+                    if is_raw_text(&name) {
                         let closer = format!("</{name}");
                         let rest = &bytes[end..];
                         if let Some(pos) = find_case_insensitive(rest, &closer) {
@@ -90,8 +94,14 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                             if !content.is_empty() {
                                 out.push(Token::Text(content.to_string()));
                             }
-                            let close_end = end + pos + closer.len();
-                            out.push(Token::EndTag { name: name.clone() });
+                            // Consume through the `>` that terminates the end
+                            // tag (it may carry attributes, e.g. `</title x>`).
+                            let name_end = end + pos + closer.len();
+                            let close_end = rest[name_end - end..]
+                                .find('>')
+                                .map(|g| name_end + g + 1)
+                                .unwrap_or(name_end);
+                            out.push(Token::EndTag { name });
                             while let Some(&(j, _)) = chars.peek() {
                                 if j < close_end {
                                     chars.next();
@@ -99,12 +109,11 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                                     break;
                                 }
                             }
-                            last_end = close_end;
                         } else {
                             if !rest.is_empty() {
                                 out.push(Token::Text(rest.to_string()));
                             }
-                            out.push(Token::EndTag { name: name.clone() });
+                            out.push(Token::EndTag { name });
                             break;
                         }
                     }
@@ -409,12 +418,14 @@ mod tests {
     #[test]
     fn comments_and_bogus() {
         let toks = tokenize("<!-- hello --><!bogus><?php echo 1; ?>");
+        // Per WHATWG bogus-comment state the `?` is part of the data —
+        // exactly what Chrome/Firefox emit for `<?php ... ?>` in HTML.
         assert_eq!(
             toks,
             vec![
                 Token::Comment(" hello ".into()),
                 Token::Comment("bogus".into()),
-                Token::Comment("php echo 1; ".into()),
+                Token::Comment("?php echo 1; ?".into()),
             ]
         );
     }
@@ -422,7 +433,8 @@ mod tests {
     #[test]
     fn unclosed_tags_tolerated() {
         let toks = tokenize("<div><p>never closed");
-        assert_eq!(toks.len(), 4); // 2 start + 1 text
+        assert_eq!(toks.len(), 3); // 2 start tags + 1 text run
+        assert!(matches!(&toks[2], Token::Text(t) if t == "never closed"));
     }
 
     #[test]

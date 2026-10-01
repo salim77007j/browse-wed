@@ -237,7 +237,7 @@ fn push_token(tok: &str, current: &mut Compound) {
     let mut part = String::new();
     // 0 = type, 1 = id, 2 = class
     let mut kind = 0u8;
-    let mut push = |part: &str, kind: u8, current: &mut Compound| {
+    let push = |part: &str, kind: u8, current: &mut Compound| {
         if part.is_empty() {
             return;
         }
@@ -434,10 +434,10 @@ impl CosmeticFilterSet {
                 if !r.exception {
                     continue;
                 }
-                if r.hosts.is_empty() || r.hosts.iter().any(|h| host_suffix(&host, h)) {
-                    if r.selectors.iter().any(|sel| sel.matches(dom, n)) {
-                        continue 'node;
-                    }
+                if (r.hosts.is_empty() || r.hosts.iter().any(|h| host_suffix(&host, h)))
+                    && r.selectors.iter().any(|sel| sel.matches(dom, n))
+                {
+                    continue 'node;
                 }
             }
             for &i in &applicable {
@@ -531,9 +531,12 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
+    /// (tag, attrs, parent, text) per node.
+    type TestNode = (String, Vec<(String, String)>, Option<u32>, String);
+
     #[derive(Default)]
     struct TestDom {
-        nodes: HashMap<u32, (String, Vec<(String, String)>, Option<u32>, String)>,
+        nodes: HashMap<u32, TestNode>,
     }
 
     impl TestDom {

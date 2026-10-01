@@ -231,7 +231,6 @@ impl CookieJar {
 
     /// Statistics.
     pub fn stats(&self) -> JarStats {
-        let now = SystemTime::now();
         JarStats {
             total: self.cookies.len(),
             partitioned: self.cookies.iter().filter(|c| c.partition_key.is_some()).count(),
@@ -252,7 +251,7 @@ impl CookieJar {
         if self.cookies.len() <= max {
             return 0;
         }
-        self.cookies.sort_by(|a, b| a.creation_time.cmp(&b.creation_time));
+        self.cookies.sort_by_key(|a| a.creation_time);
         let removed = self.cookies.len() - max;
         self.cookies.truncate(max);
         removed
@@ -470,8 +469,7 @@ fn path_matches(request_path: &str, cookie_path: &str) -> bool {
     if request_path == cookie_path {
         return true;
     }
-    if request_path.starts_with(cookie_path) {
-        let tail = &request_path[cookie_path.len()..];
+    if let Some(tail) = request_path.strip_prefix(cookie_path) {
         if cookie_path.ends_with('/') || tail.starts_with('/') {
             return true;
         }

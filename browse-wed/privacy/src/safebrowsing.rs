@@ -252,7 +252,7 @@ impl SafeBrowsingDb {
             }
             let n64 = u64::from_le_bytes(tail[16..24].try_into().expect("8-byte slice"));
             let n = n64 as usize;
-            let Some(expected_len) = 24usize.checked_add(32usize.checked_mul(n).unwrap_or(usize::MAX)) else {
+            let Some(expected_len) = 24usize.checked_add(32usize.saturating_mul(n)) else {
                 continue;
             };
             if tail.len() != expected_len {

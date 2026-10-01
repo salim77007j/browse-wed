@@ -12,7 +12,8 @@
 
 use std::collections::HashMap;
 
-use swash::scale::{Render, ScaleContext, Source, StrikeWith};
+use swash::proxy::MetricsProxy;
+use swash::scale::{Render, ScaleContext, Source};
 use swash::FontRef;
 
 /// A font handle resolved from a family query.
@@ -44,7 +45,7 @@ pub struct FontSystem {
     db: fontdb::Database,
     cx: ScaleContext,
     /// (face, size) → scaled metrics.
-    metrics_cache: HashMap<(u32, u32), ScaledMetrics>,
+    metrics_cache: HashMap<(fontdb::ID, u32), ScaledMetrics>,
 }
 
 /// Scaled font metrics for layout.
@@ -76,8 +77,12 @@ impl FontSystem {
     pub fn new() -> FontSystem {
         let mut db = fontdb::Database::new();
         db.load_system_fonts();
+        // Map generic CSS families to fonts that actually exist on this
+        // machine. fontdb defaults to Windows names (Arial, ...); on Linux
+        // containers those are absent and every sans-serif query would miss.
+        map_generic_families(&mut db);
         // Guarantee a fallback even on bare containers.
-        if db.len() == 0 {
+        if db.is_empty() {
             tracing::warn!("no system fonts found; text rendering will be degraded");
         }
         FontSystem {
@@ -128,22 +133,20 @@ impl FontSystem {
 
     /// Scaled metrics for (face, size).
     pub fn metrics(&mut self, face: fontdb::ID, size: f32) -> ScaledMetrics {
-        let cache_key = (face, size.to_bits() as u32);
+        let cache_key = (face, size.to_bits());
         if let Some(m) = self.metrics_cache.get(&cache_key) {
             return *m;
         }
         let m = self
             .db
             .with_face_data(face, |data, index| {
-                let Ok(font) = FontRef::from_index(data, index) else {
-                    return None;
-                };
-                let proxy = swash::MetricsProxy::from_font(&font);
-                let metrics = proxy.metrics(&[]);
-                let scaled = metrics.scale(size);
+                let font = FontRef::from_index(data, index as usize)?;
+                let proxy = MetricsProxy::from_font(&font);
+                let scaled = proxy.materialize_metrics(&font, &[]).scale(size);
                 Some(ScaledMetrics {
                     ascent: scaled.ascent,
-                    descent: -scaled.descent,
+                    // swash reports descent as a positive below-baseline value.
+                    descent: scaled.descent,
                     line_gap: scaled.leading,
                 })
             })
@@ -155,17 +158,18 @@ impl FontSystem {
 
     /// A measured run of text.
     pub fn measure(&mut self, face: fontdb::ID, size: f32, text: &str) -> f32 {
-        let cache_key = (face, size.to_bits() as u32);
+        let cache_key = (face, size.to_bits());
         if !self.metrics_cache.contains_key(&cache_key) {
             let _ = self.metrics(face, size);
         }
         let mut width = 0.0f32;
         self.db.with_face_data(face, |data, index| {
-            let Ok(font) = FontRef::from_index(data, index) else {
+            let Some(font) = FontRef::from_index(data, index as usize) else {
                 return;
             };
-            let proxy = swash::MetricsProxy::from_font(&font);
-            let metrics = proxy.metrics(&[]).scale(size);
+            let proxy = MetricsProxy::from_font(&font);
+            let metrics = proxy.materialize_metrics(&font, &[]).scale(size);
+            let advances = proxy.materialize_glyph_metrics(&font, &[]).scale(size);
             let charmap = font.charmap();
             for ch in text.chars() {
                 if ch.is_whitespace() {
@@ -174,7 +178,7 @@ impl FontSystem {
                     continue;
                 }
                 let gid = charmap.map(ch);
-                width += metrics.advance_width(gid);
+                width += advances.advance_width(gid);
             }
         });
         width
@@ -189,17 +193,17 @@ impl FontSystem {
     ) -> Vec<(f32, RasterGlyph)> {
         let mut out = Vec::new();
         self.db.with_face_data(face, |data, index| {
-            let Ok(font) = FontRef::from_index(data, index) else {
+            let Some(font) = FontRef::from_index(data, index as usize) else {
                 return;
             };
-            let proxy = swash::MetricsProxy::from_font(&font);
-            let metrics = proxy.metrics(&[]).scale(size);
+            let proxy = MetricsProxy::from_font(&font);
+            let metrics = proxy.materialize_metrics(&font, &[]).scale(size);
+            let advances = proxy.materialize_glyph_metrics(&font, &[]).scale(size);
             let charmap = font.charmap();
             let mut pen = 0.0f32;
-            let mut scaler = self.cx.builder(&font).size(size).build();
-            let mut render = Render::new(&[Source::Outline])
-                .format(swash::scale::image::Format::Alpha)
-                .strike_with(StrikeWith::BestFit);
+            let mut scaler = self.cx.builder(font).size(size).build();
+            let mut render = Render::new(&[Source::Outline]);
+            render.format(swash::zeno::Format::Alpha);
             for ch in text.chars() {
                 if ch.is_whitespace() {
                     pen += metrics.average_width;
@@ -219,10 +223,51 @@ impl FontSystem {
                         },
                     ));
                 }
-                pen += metrics.advance_width(gid);
+                pen += advances.advance_width(gid);
             }
         });
         out
+    }
+}
+
+/// Point generic CSS families at fonts that exist on this machine.
+///
+/// `fontdb` ships Windows-centric defaults (`Arial`, `Times New Roman`,
+/// `Courier New`). On Linux/CI those faces are absent, so every
+/// `sans-serif` query would return `None`. We probe a curated list of the
+/// most common faces per platform and bind the first hit — the same job
+/// fontconfig does for native Linux browsers.
+fn map_generic_families(db: &mut fontdb::Database) {
+    let has = |name: &str| {
+        db.faces()
+            .any(|f| f.families.iter().any(|(n, _)| n.eq_ignore_ascii_case(name)))
+    };
+    const SANS: &[&str] = &[
+        "Arial", "DejaVu Sans", "Liberation Sans", "Noto Sans", "Segoe UI", "Helvetica",
+        "Ubuntu", "Cantarell", "Roboto",
+    ];
+    const SERIF: &[&str] = &[
+        "Times New Roman", "DejaVu Serif", "Liberation Serif", "Noto Serif", "Georgia",
+        "FreeSerif",
+    ];
+    const MONO: &[&str] = &[
+        "Courier New", "DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono", "Consolas",
+        "Menlo", "FreeMono",
+    ];
+    // Resolve while `db` is immutably borrowed, then mutate.
+    let sans = SANS.iter().find(|n| has(n)).copied();
+    let serif = SERIF.iter().find(|n| has(n)).copied();
+    let mono = MONO.iter().find(|n| has(n)).copied();
+    if let Some(name) = sans {
+        db.set_sans_serif_family(name);
+        db.set_cursive_family(name);
+        db.set_fantasy_family(name);
+    }
+    if let Some(name) = serif {
+        db.set_serif_family(name);
+    }
+    if let Some(name) = mono {
+        db.set_monospace_family(name);
     }
 }
 
